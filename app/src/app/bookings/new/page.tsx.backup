@@ -1,0 +1,528 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Alert } from '@/components/ui/Alert';
+import { useAuth } from '@/lib/auth/auth-context';
+import CapacityIndicator from '@/components/bookings/CapacityIndicator';
+import LineItemsEditor, { LineItem } from '@/components/bookings/LineItemsEditor';
+import type { Database } from '@/types/database.types';
+
+type Room = Database['public']['Tables']['rooms']['Row'];
+type Client = Database['public']['Tables']['clients']['Row'];
+
+interface ConflictResponse {
+  has_conflict: boolean;
+  conflicting_booking_number?: string;
+  conflicting_event_name?: string;
+}
+
+export default function NewBookingPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [conflictCheck, setConflictCheck] = useState<ConflictResponse | null>(null);
+
+  // Form data with new fields
+  const [formData, setFormData] = useState({
+    client_name: '',
+    company_name: '',
+    client_email: '',
+    client_phone: '',
+    room_id: '',
+    event_type: '',
+    event_name: '',
+    start_date: '',
+    end_date: '',
+    start_time: '08:00:00',
+    end_time: '17:00:00',
+    number_of_attendees: '',
+    special_requirements: '',
+    notes: '',
+    status: 'tentative' as 'tentative' | 'confirmed',
+  });
+
+  // Client autocomplete
+  const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // Dropdown options
+  const [rooms, setRooms] = useState<Room[]>([]);
+  
+  // Line items for flexible pricing
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+
+  // Fetch dropdown data
+  useEffect(() => {
+    if (!user) return;
+
+    Promise.all([
+      fetch('/api/rooms?limit=100').then(r => r.json()),
+      fetch('/api/clients?limit=100').then(r => r.json()),
+      fetch('/api/event-types?limit=100').then(r => r.json()).catch(() => ({ success: false })),
+      fetch('/api/addons?limit=100').then(r => r.json()).catch(() => ({ success: false })),
+    ]).then(([roomsData, clientsData, eventTypesData, addonsData]) => {
+      if (roomsData.success) setRooms(roomsData.data.filter((r: Room) => r.is_available));
+      if (clientsData.success) setClients(clientsData.data.filter((c: Client) => c.is_active));
+      if (eventTypesData.success) setEventTypes(eventTypesData.data?.filter((e: EventType) => e.is_active) || []);
+      if (addonsData.success) setAddons(addonsData.data?.filter((a: Addon) => a.is_active) || []);
+    }).catch(console.error);
+  }, [user]);
+
+  // Calculate totals when room, dates, or addons change
+  useEffect(() => {
+    // Calculate number of days
+    if (formData.start_date && formData.end_date) {
+      const start = new Date(formData.start_date);
+      const end = new Date(formData.end_date);
+      const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      setNumberOfDays(days);
+    }
+
+    // Get room rate
+    const selectedRoom = rooms.find(r => r.id === formData.room_id);
+    const rate = selectedRoom?.rate_per_day || 0;
+    setRoomRate(rate);
+
+    // Calculate room total
+    const rTotal = rate * numberOfDays;
+    setRoomTotal(rTotal);
+
+    // Calculate addons total
+    const aTotal = selectedAddons.reduce((sum, addon) => sum + (addon.rate * addon.quantity), 0);
+    setAddonsTotal(aTotal);
+
+    // Calculate final amount
+    const total = rTotal + aTotal;
+    const final = total - discount;
+    setFinalAmount(Math.max(0, final));
+  }, [formData.room_id, formData.start_date, formData.end_date, rooms, numberOfDays, selectedAddons, discount]);
+
+  // Check for conflicts when room or dates change
+  useEffect(() => {
+    if (!formData.room_id || !formData.start_date || !formData.end_date) {
+      setConflictCheck(null);
+      return;
+    }
+
+    const checkConflict = async () => {
+      try {
+        const response = await fetch('/api/bookings/check-conflict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room_id: formData.room_id,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            start_time: formData.start_time,
+            end_time: formData.end_time,
+          }),
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+          setConflictCheck(result.data);
+        }
+      } catch (err) {
+        console.error('Conflict check failed:', err);
+      }
+    };
+
+    const timer = setTimeout(checkConflict, 500); // Debounce
+    return () => clearTimeout(timer);
+  }, [formData.room_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time]);
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddAddon = () => {
+    if (addons.length === 0) return;
+    
+    const firstAddon = addons[0];
+    setSelectedAddons(prev => [
+      ...prev,
+      { addon_id: firstAddon.id, quantity: 1, rate: firstAddon.rate, notes: '' }
+    ]);
+  };
+
+  const handleRemoveAddon = (index: number) => {
+    setSelectedAddons(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddonChange = (index: number, field: keyof BookingAddon, value: string | number) => {
+    setSelectedAddons(prev => prev.map((addon, i) => 
+      i === index ? { ...addon, [field]: value } : addon
+    ));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (conflictCheck?.has_conflict) {
+      setError('Cannot create booking: Room conflict exists');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        ...formData,
+        number_of_attendees: formData.number_of_attendees ? parseInt(formData.number_of_attendees) : null,
+        total_amount: roomTotal + addonsTotal,
+        discount_amount: discount,
+        final_amount: finalAmount,
+        addons: selectedAddons,
+      };
+
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create booking');
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        router.push(`/bookings/${result.data.id}`);
+      }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount);
+  };
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Create New Booking</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Fill in the booking details below
+          </p>
+        </div>
+
+        {success && (
+          <Alert variant="success">
+            Booking created successfully! Redirecting...
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="error">
+            {error}
+          </Alert>
+        )}
+
+        {conflictCheck?.has_conflict && (
+          <Alert variant="error" title="Room Conflict Detected">
+            This room is already booked for the selected date/time. Conflicting booking: {conflictCheck.conflicting_booking_number} - {conflictCheck.conflicting_event_name}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Basic Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Client"
+                  required
+                  value={formData.client_id}
+                  onChange={(e) => handleInputChange('client_id', e.target.value)}
+                  options={[
+                    { value: '', label: 'Select a client' },
+                    ...clients.map(c => ({ value: c.id, label: c.organization_name })),
+                  ]}
+                />
+
+                <Input
+                  label="Event Name"
+                  required
+                  value={formData.event_name}
+                  onChange={(e) => handleInputChange('event_name', e.target.value)}
+                  placeholder="e.g., Annual Conference 2025"
+                />
+
+                <Select
+                  label="Event Type"
+                  required
+                  value={formData.event_type_id}
+                  onChange={(e) => handleInputChange('event_type_id', e.target.value)}
+                  options={[
+                    { value: '', label: 'Select event type' },
+                    ...eventTypes.map(et => ({ value: et.id, label: et.name })),
+                  ]}
+                />
+
+                <Input
+                  label="Number of Attendees"
+                  type="number"
+                  min="1"
+                  value={formData.number_of_attendees}
+                  onChange={(e) => handleInputChange('number_of_attendees', e.target.value)}
+                  placeholder="Expected attendees"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Room & Schedule */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Room & Schedule</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Room"
+                  required
+                  value={formData.room_id}
+                  onChange={(e) => handleInputChange('room_id', e.target.value)}
+                  options={[
+                    { value: '', label: 'Select a room' },
+                    ...rooms.map(r => ({ 
+                      value: r.id, 
+                      label: `${r.name} (Capacity: ${r.capacity}, ${formatCurrency(r.rate_per_day)}/day)` 
+                    })),
+                  ]}
+                />
+
+                <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                  <Input
+                    label="Start Date"
+                    type="date"
+                    required
+                    value={formData.start_date}
+                    onChange={(e) => handleInputChange('start_date', e.target.value)}
+                  />
+
+                  <Input
+                    label="End Date"
+                    type="date"
+                    required
+                    value={formData.end_date}
+                    onChange={(e) => handleInputChange('end_date', e.target.value)}
+                  />
+
+                  <Input
+                    label="Start Time"
+                    type="time"
+                    required
+                    value={formData.start_time}
+                    onChange={(e) => handleInputChange('start_time', e.target.value + ':00')}
+                  />
+
+                  <Input
+                    label="End Time"
+                    type="time"
+                    required
+                    value={formData.end_time}
+                    onChange={(e) => handleInputChange('end_time', e.target.value + ':00')}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Add-ons */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Add-ons & Services</CardTitle>
+                <Button type="button" variant="secondary" size="sm" onClick={handleAddAddon}>
+                  Add Service
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {selectedAddons.length === 0 ? (
+                <p className="text-sm text-gray-500">No add-ons selected</p>
+              ) : (
+                <div className="space-y-3">
+                  {selectedAddons.map((addon, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-3 items-end">
+                      <div className="col-span-5">
+                        <Select
+                          label="Service"
+                          value={addon.addon_id}
+                          onChange={(e) => {
+                            const selected = addons.find(a => a.id === e.target.value);
+                            handleAddonChange(index, 'addon_id', e.target.value);
+                            if (selected) handleAddonChange(index, 'rate', selected.rate);
+                          }}
+                          options={addons.map(a => ({ value: a.id, label: `${a.name} (${formatCurrency(a.rate)}/${a.unit})` }))}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          label="Quantity"
+                          type="number"
+                          min="1"
+                          value={addon.quantity.toString()}
+                          onChange={(e) => handleAddonChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          label="Rate"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={addon.rate.toString()}
+                          onChange={(e) => handleAddonChange(index, 'rate', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-sm font-medium text-gray-700 mb-1">Total</div>
+                        <div className="text-lg font-semibold">{formatCurrency(addon.rate * addon.quantity)}</div>
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleRemoveAddon(index)}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Additional Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Additional Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Special Requirements
+                  </label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    rows={3}
+                    value={formData.special_requirements}
+                    onChange={(e) => handleInputChange('special_requirements', e.target.value)}
+                    placeholder="Any special requirements or requests..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Internal Notes
+                  </label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    rows={3}
+                    value={formData.notes}
+                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                    placeholder="Internal notes (not visible to client)..."
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cost Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Room Rate ({numberOfDays} days × {formatCurrency(roomRate)})</span>
+                  <span className="font-medium">{formatCurrency(roomTotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Add-ons & Services</span>
+                  <span className="font-medium">{formatCurrency(addonsTotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-gray-600">Discount</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={discount.toString()}
+                      onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                      className="w-32 text-right"
+                    />
+                  </div>
+                </div>
+                <div className="border-t pt-3 flex justify-between">
+                  <span className="text-lg font-semibold">Final Amount</span>
+                  <span className="text-2xl font-bold text-amber-600">{formatCurrency(finalAmount)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.back()}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              loading={loading}
+              disabled={loading || conflictCheck?.has_conflict || !formData.client_id || !formData.room_id || !formData.event_type_id}
+            >
+              Create Booking
+            </Button>
+          </div>
+        </form>
+      </div>
+    </DashboardLayout>
+  );
+}
