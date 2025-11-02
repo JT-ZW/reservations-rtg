@@ -7,9 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
 export async function middleware(request: NextRequest) {
-  // Skip middleware entirely for login page and auth API to prevent redirect loops
+  // Skip middleware entirely for login page, password reset pages, and auth API
   if (
     request.nextUrl.pathname === '/login' ||
+    request.nextUrl.pathname === '/forgot-password' ||
+    request.nextUrl.pathname === '/reset-password' ||
     request.nextUrl.pathname.startsWith('/api/auth/')
   ) {
     return NextResponse.next();

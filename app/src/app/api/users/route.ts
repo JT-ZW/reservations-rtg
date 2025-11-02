@@ -92,10 +92,18 @@ export async function POST(request: Request) {
 
     // Create auth user first using admin client with service role
     const adminClient = createAdminClient();
+    
+    // Generate a temporary password (user will be required to change it)
+    const tempPassword = Math.random().toString(36).slice(-12) + 'Aa1!';
+    
     const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
       email,
-      password,
-      email_confirm: true,
+      password: tempPassword,
+      email_confirm: true, // Auto-confirm email since admin is creating
+      user_metadata: {
+        full_name,
+        role,
+      },
     });
 
     if (authError || !authUser.user) {
@@ -104,6 +112,25 @@ export async function POST(request: Request) {
         { error: authError?.message || 'Failed to create auth user' },
         { status: 500 }
       );
+    }
+
+    // Send invite email using admin API (this sends a proper welcome/invite email)
+    try {
+      const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password`,
+        data: {
+          full_name,
+          role,
+        },
+      });
+      
+      if (inviteError) {
+        console.error('Failed to send invite email:', inviteError);
+        // Don't fail user creation if email fails, just log it
+      }
+    } catch (emailError) {
+      console.error('Email send error:', emailError);
+      // Don't fail user creation if email fails
     }
 
     // Create user profile record

@@ -12,7 +12,7 @@ import { z } from 'zod';
 export const roomSchema = z.object({
   name: z.string().min(1, 'Room name is required').max(100),
   capacity: z.number().int().min(1, 'Capacity must be at least 1'),
-  rate_per_day: z.number().min(0, 'Rate must be positive'),
+  rate_per_day: z.number().min(0, 'Rate must be positive').optional().nullable(),
   amenities: z.record(z.string(), z.any()).optional().default({}),
   description: z.string().max(500).optional().nullable(),
   is_available: z.boolean().optional().default(true),

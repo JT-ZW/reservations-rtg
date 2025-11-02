@@ -176,8 +176,11 @@ export default function LoginPage() {
 
             {/* Forgot Password Link */}
             <div className="flex items-center justify-end">
-              <a href="#" className="text-sm font-medium text-brand-primary hover:text-brand-secondary transition-colors">
-                forgot password ?
+              <a 
+                href="/forgot-password" 
+                className="text-sm font-medium text-brand-primary hover:text-brand-secondary transition-colors"
+              >
+                Forgot password?
               </a>
             </div>
 
@@ -213,6 +216,11 @@ export default function LoginPage() {
         {/* Logo Container - Centered */}
         <div className="relative z-10 flex items-center justify-center w-full p-12">
           <div className="text-center">
+            {/* Title Above Logo */}
+            <h1 className="text-3xl font-bold text-gray-900 mb-6">
+              Function Reservations System
+            </h1>
+            
             {/* Large Logo Card */}
             <div className="inline-block p-12 bg-gradient-to-br from-gray-50 to-white rounded-3xl shadow-2xl border border-gray-100 transform hover:scale-105 transition-all duration-300">
               <Image 

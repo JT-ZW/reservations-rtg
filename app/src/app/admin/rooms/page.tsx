@@ -8,6 +8,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Toast } from '@/components/ui/Toast';
 
 interface Room {
   id: string;
@@ -29,10 +30,10 @@ export default function RoomsManagementPage() {
   const [formData, setFormData] = useState({
     name: '',
     capacity: '',
-    rate_per_day: '',
     description: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -58,7 +59,6 @@ export default function RoomsManagementPage() {
       setFormData({
         name: room.name,
         capacity: room.capacity.toString(),
-        rate_per_day: room.rate_per_day.toString(),
         description: room.description || '',
       });
     } else {
@@ -66,7 +66,6 @@ export default function RoomsManagementPage() {
       setFormData({
         name: '',
         capacity: '',
-        rate_per_day: '',
         description: '',
       });
     }
@@ -87,21 +86,30 @@ export default function RoomsManagementPage() {
         body: JSON.stringify({
           name: formData.name,
           capacity: parseInt(formData.capacity),
-          rate_per_day: parseFloat(formData.rate_per_day),
           description: formData.description || null,
         }),
       });
 
       if (response.ok) {
         setShowModal(false);
+        setToast({
+          message: editingRoom ? 'Room updated successfully!' : 'Room created successfully!',
+          type: 'success'
+        });
         fetchRooms();
       } else {
         const error = await response.json();
-        alert(error.error || `Failed to ${editingRoom ? 'update' : 'create'} room`);
+        setToast({
+          message: error.error || `Failed to ${editingRoom ? 'update' : 'create'} room`,
+          type: 'error'
+        });
       }
     } catch (error) {
       console.error('Error saving room:', error);
-      alert('Failed to save room');
+      setToast({
+        message: 'Failed to save room. Please try again.',
+        type: 'error'
+      });
     } finally {
       setSubmitting(false);
     }
@@ -120,13 +128,23 @@ export default function RoomsManagementPage() {
       });
 
       if (response.ok) {
+        setToast({
+          message: currentStatus ? 'Room deactivated successfully!' : 'Room activated successfully!',
+          type: 'success'
+        });
         fetchRooms();
       } else {
-        alert('Failed to update room status');
+        setToast({
+          message: 'Failed to update room status',
+          type: 'error'
+        });
       }
     } catch (error) {
       console.error('Error updating room:', error);
-      alert('Failed to update room');
+      setToast({
+        message: 'Failed to update room. Please try again.',
+        type: 'error'
+      });
     }
   };
 
@@ -172,6 +190,15 @@ export default function RoomsManagementPage() {
 
   return (
     <DashboardLayout>
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
@@ -204,10 +231,6 @@ export default function RoomsManagementPage() {
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Capacity:</span>
                   <span className="text-sm font-medium text-gray-900">{room.capacity} people</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Rate:</span>
-                  <span className="text-sm font-medium text-amber-600">{formatCurrency(room.rate_per_day)}/day</span>
                 </div>
                 {room.description && (
                   <div>
@@ -285,22 +308,6 @@ export default function RoomsManagementPage() {
                   onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   placeholder="Number of people"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rate per Day (USD) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={formData.rate_per_day}
-                  onChange={(e) => setFormData({ ...formData, rate_per_day: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="0.00"
                 />
               </div>
 
