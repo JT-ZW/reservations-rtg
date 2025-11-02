@@ -164,6 +164,7 @@ export const bookingFilterSchema = paginationSchema.extend({
   client_id: z.string().uuid().optional(),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  search: z.string().optional(),
 });
 
 export type PaginationParams = z.infer<typeof paginationSchema>;

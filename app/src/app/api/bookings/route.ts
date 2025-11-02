@@ -55,11 +55,32 @@ export async function GET(request: NextRequest) {
     
     // Parse query parameters
     const params = parseQueryParams(request.url);
-    const { page, limit, status, room_id, client_id, start_date, end_date } = 
+    const { page, limit, status, room_id, client_id, start_date, end_date, search } = 
       bookingFilterSchema.parse(params);
     
     // Calculate pagination
     const { from, to } = calculatePagination({ page, limit });
+    
+    // Auto-complete confirmed bookings that have passed their end date/time
+    // Get current date and time in ISO format
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
+    
+    // First, mark bookings as completed where end_date is in the past
+    await supabase
+      .from('bookings')
+      .update({ status: 'completed' })
+      .eq('status', 'confirmed')
+      .lt('end_date', currentDate);
+    
+    // Then, mark bookings as completed where end_date is today but end_time has passed
+    await supabase
+      .from('bookings')
+      .update({ status: 'completed' })
+      .eq('status', 'confirmed')
+      .eq('end_date', currentDate)
+      .lt('end_time', currentTime);
     
     // Build query
     let query = supabase
@@ -88,6 +109,10 @@ export async function GET(request: NextRequest) {
     }
     if (end_date) {
       query = query.lte('end_date', end_date);
+    }
+    if (search) {
+      // Search in event_name or booking_number
+      query = query.or(`event_name.ilike.%${search}%,booking_number.ilike.%${search}%`);
     }
 
     const { data: bookings, error, count } = await query;

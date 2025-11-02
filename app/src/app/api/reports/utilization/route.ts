@@ -9,13 +9,27 @@ interface RoomUtilization {
   confirmed_bookings: number;
   total_revenue: number;
   avg_attendees: number;
+  utilization_rate: number;
+  total_booked_days: number;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { supabase, user } = await getAuthenticatedClient();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    // Calculate total days in period
+    let totalDays = 30; // default
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     }
 
     // Fetch all rooms
@@ -31,10 +45,20 @@ export async function GET() {
     const utilizationData: RoomUtilization[] = [];
 
     for (const room of rooms || []) {
-      const { data: bookings, error: bookingsError } = await supabase
+      let bookingsQuery = supabase
         .from('bookings')
-        .select('status, final_amount, number_of_attendees')
+        .select('status, final_amount, number_of_attendees, start_date, end_date')
         .eq('room_id', room.id);
+
+      // Apply date filters
+      if (startDate) {
+        bookingsQuery = bookingsQuery.gte('end_date', startDate);
+      }
+      if (endDate) {
+        bookingsQuery = bookingsQuery.lte('start_date', endDate);
+      }
+
+      const { data: bookings, error: bookingsError } = await bookingsQuery;
 
       if (bookingsError) throw bookingsError;
 
@@ -43,11 +67,25 @@ export async function GET() {
       const total_revenue = bookings
         ?.filter(b => b.status === 'confirmed' || b.status === 'completed')
         .reduce((sum, b) => sum + (b.final_amount || 0), 0) || 0;
-      const avg_attendees = confirmed_bookings > 0
-        ? bookings
-            ?.filter(b => b.status === 'confirmed' || b.status === 'completed')
-            .reduce((sum, b) => sum + (b.number_of_attendees || 0), 0) / confirmed_bookings
+      
+      const attendees_data = bookings?.filter(b => 
+        (b.status === 'confirmed' || b.status === 'completed') && b.number_of_attendees
+      );
+      const avg_attendees = attendees_data && attendees_data.length > 0
+        ? Math.round(attendees_data.reduce((sum, b) => sum + (b.number_of_attendees || 0), 0) / attendees_data.length)
         : 0;
+
+      // Calculate total booked days
+      let total_booked_days = 0;
+      bookings?.filter(b => b.status === 'confirmed' || b.status === 'completed').forEach(booking => {
+        const start = new Date(booking.start_date);
+        const end = new Date(booking.end_date);
+        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        total_booked_days += days;
+      });
+
+      // Utilization rate = (booked days / total available days) * 100
+      const utilization_rate = totalDays > 0 ? (total_booked_days / totalDays) * 100 : 0;
 
       utilizationData.push({
         id: room.id,
@@ -56,17 +94,22 @@ export async function GET() {
         total_bookings,
         confirmed_bookings,
         total_revenue,
-        avg_attendees: Math.round(avg_attendees),
+        avg_attendees,
+        utilization_rate: Math.min(utilization_rate, 100), // Cap at 100%
+        total_booked_days,
       });
     }
 
-    // Sort by total bookings
-    utilizationData.sort((a, b) => b.total_bookings - a.total_bookings);
+    // Sort by total revenue
+    utilizationData.sort((a, b) => b.total_revenue - a.total_revenue);
 
     // Calculate overall stats
     const totalBookings = utilizationData.reduce((sum, room) => sum + room.total_bookings, 0);
     const totalRevenue = utilizationData.reduce((sum, room) => sum + room.total_revenue, 0);
     const confirmedBookings = utilizationData.reduce((sum, room) => sum + room.confirmed_bookings, 0);
+    const averageUtilization = utilizationData.length > 0 
+      ? utilizationData.reduce((sum, room) => sum + room.utilization_rate, 0) / utilizationData.length 
+      : 0;
 
     return NextResponse.json({
       data: utilizationData,
@@ -75,7 +118,8 @@ export async function GET() {
         totalBookings,
         confirmedBookings,
         totalRevenue,
-        averageUtilization: totalBookings > 0 ? (confirmedBookings / totalBookings) * 100 : 0,
+        averageUtilization,
+        totalDaysInPeriod: totalDays,
       },
     });
   } catch (error) {

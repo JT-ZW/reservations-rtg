@@ -33,6 +33,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Mobile touch improvements */
+@media (max-width: 768px) {
+  /* Ensure buttons are touch-friendly (minimum 44x44px) */
+  button, a, input, select, textarea {
+    min-height: 44px;
+    -webkit-tap-highlight-color: rgba(252, 191, 73, 0.3);
+  }
+  
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  /* Improve form field visibility on mobile */
+  input, select, textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
 /* Premium Utilities */
 .animate-gradient {
   background-size: 200% 200%;
@@ -96,3 +115,4 @@ html {
   outline: 2px solid #FCBF49;
   outline-offset: 2px;
 }
+

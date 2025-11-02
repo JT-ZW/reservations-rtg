@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Rainbow Towers Booking System",
   description: "Conference & Event Booking Management System",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
 };
 
 // Disable caching at root level to prevent stale data

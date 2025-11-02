@@ -53,6 +53,24 @@ export default function NewBookingPage() {
     status: 'tentative' as 'tentative' | 'confirmed',
   });
 
+  // Event type handling
+  const [eventTypeSelection, setEventTypeSelection] = useState<string>('');
+  const [customEventType, setCustomEventType] = useState<string>('');
+
+  // Popular event types for analytics
+  const popularEventTypes = [
+    'Conference',
+    'Meeting',
+    'Wedding',
+    'Training/Workshop',
+    'Seminar',
+    'Corporate Event',
+    'Team Building',
+    'Product Launch',
+    'Gala Dinner',
+    'Other',
+  ];
+
   // Client autocomplete state
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
@@ -169,6 +187,23 @@ export default function NewBookingPage() {
     if (field === 'contact_person') {
       setSelectedClientId(null);
     }
+  };
+
+  const handleEventTypeChange = (value: string) => {
+    setEventTypeSelection(value);
+    if (value !== 'Other') {
+      // Use the predefined type
+      setFormData(prev => ({ ...prev, event_type: value }));
+      setCustomEventType('');
+    } else {
+      // Clear event_type until they type custom value
+      setFormData(prev => ({ ...prev, event_type: '' }));
+    }
+  };
+
+  const handleCustomEventTypeChange = (value: string) => {
+    setCustomEventType(value);
+    setFormData(prev => ({ ...prev, event_type: value }));
   };
 
   const handleClientSelect = (client: Client) => {
@@ -401,13 +436,27 @@ export default function NewBookingPage() {
                   placeholder="e.g., Annual Conference 2025"
                 />
 
-                <Input
+                <Select
                   label="Event Type"
                   required
-                  value={formData.event_type}
-                  onChange={(e) => handleInputChange('event_type', e.target.value)}
-                  placeholder="e.g., Conference, Wedding, Training"
+                  value={eventTypeSelection}
+                  onChange={(e) => handleEventTypeChange(e.target.value)}
+                  options={[
+                    { value: '', label: 'Select event type' },
+                    ...popularEventTypes.map(type => ({ value: type, label: type })),
+                  ]}
                 />
+
+                {/* Custom Event Type Input - shown when "Other" is selected */}
+                {eventTypeSelection === 'Other' && (
+                  <Input
+                    label="Custom Event Type"
+                    required
+                    value={customEventType}
+                    onChange={(e) => handleCustomEventTypeChange(e.target.value)}
+                    placeholder="Enter your event type"
+                  />
+                )}
 
                 <Select
                   label="Room"

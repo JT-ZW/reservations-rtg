@@ -29,6 +29,19 @@ export async function GET(
     const { supabase } = await getAuthenticatedClient();
     const { id } = await context.params;
     
+    // First, auto-complete this booking if it should be completed
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0];
+    const currentTime = now.toTimeString().split(' ')[0];
+    
+    // Check and update if booking is confirmed and has passed
+    await supabase
+      .from('bookings')
+      .update({ status: 'completed' })
+      .eq('id', id)
+      .eq('status', 'confirmed')
+      .or(`end_date.lt.${currentDate},and(end_date.eq.${currentDate},end_time.lt.${currentTime})`);
+    
     const { data: booking, error } = await supabase
       .from('bookings')
       .select(`
