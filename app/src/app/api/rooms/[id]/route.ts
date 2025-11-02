@@ -71,6 +71,12 @@ export async function PUT(
     
     const validatedData = updateRoomSchema.parse(body);
     
+    // Remove null from rate_per_day if present (convert to undefined for DB)
+    const updateData: any = { ...validatedData };
+    if (updateData.rate_per_day === null) {
+      delete updateData.rate_per_day;
+    }
+    
     // Get current room state for change tracking
     const { data: oldRoom } = await supabase
       .from('rooms')
@@ -82,7 +88,7 @@ export async function PUT(
     const { data: room, error } = await supabase
       .from('rooms')
       .update({
-        ...validatedData,
+        ...updateData,
         updated_by: user.id,
       })
       .eq('id', id)

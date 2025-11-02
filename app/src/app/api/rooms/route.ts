@@ -80,11 +80,17 @@ export async function POST(request: NextRequest) {
     
     const validatedData = roomSchema.parse(body);
     
+    // Remove null from rate_per_day if present (convert to undefined for DB)
+    const insertData: any = { ...validatedData };
+    if (insertData.rate_per_day === null) {
+      delete insertData.rate_per_day;
+    }
+    
     // Insert room
     const { data: room, error } = await supabase
       .from('rooms')
       .insert({
-        ...validatedData,
+        ...insertData,
         created_by: user.id,
         updated_by: user.id,
       })
