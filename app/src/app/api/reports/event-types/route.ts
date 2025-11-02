@@ -25,10 +25,16 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Build query
+    // Build query - get bookings with event type joined
     let query = supabase
       .from('bookings')
-      .select('event_type, status, final_amount, number_of_attendees, start_date');
+      .select(`
+        status,
+        final_amount,
+        number_of_attendees,
+        start_date,
+        event_types!event_type_id (name)
+      `);
 
     // Apply date filters if provided
     if (startDate) {
@@ -40,7 +46,10 @@ export async function GET(request: Request) {
 
     const { data: bookings, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Event type analytics query error:', error);
+      throw error;
+    }
 
     // Group by event type
     const eventTypeMap = new Map<string, {
@@ -52,8 +61,8 @@ export async function GET(request: Request) {
       attendees: number;
     }>();
 
-    bookings?.forEach((booking) => {
-      const eventType = booking.event_type || 'Unspecified';
+    bookings?.forEach((booking: any) => {
+      const eventType = booking.event_types?.name || 'Unspecified';
       const current = eventTypeMap.get(eventType) || {
         total: 0,
         confirmed: 0,

@@ -111,6 +111,13 @@ export default function AdminPage() {
       path: '/admin/event-types',
       stats: `${stats.totalEventTypes} types`,
     },
+    {
+      title: 'Audit Logs',
+      description: 'View system activity and user actions',
+      icon: '📋',
+      path: '/admin/audit-logs',
+      stats: 'Track all activities',
+    },
   ];
 
   if (authLoading) {

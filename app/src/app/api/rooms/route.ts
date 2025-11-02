@@ -19,6 +19,7 @@ import {
 import { roomSchema, paginationSchema } from '@/lib/validations/schemas';
 import { requireAnyRole } from '@/lib/auth/server-auth';
 import { UserRole } from '@/types';
+import { logAudit, extractRequestContext } from '@/lib/audit/audit-logger';
 
 // GET /api/rooms
 export async function GET(request: NextRequest) {
@@ -102,6 +103,24 @@ export async function POST(request: NextRequest) {
       entityId: room.id,
       details: { name: room.name },
     });
+
+    // Log audit trail
+    await logAudit(
+      {
+        action: 'CREATE',
+        resourceType: 'room',
+        resourceId: room.id,
+        resourceName: room.name,
+        description: `Created room ${room.name}`,
+        metadata: {
+          name: room.name,
+          capacity: room.capacity,
+          rate_per_day: room.rate_per_day,
+          is_available: room.is_available,
+        },
+      },
+      extractRequestContext(request)
+    );
 
     return successResponse(room, 'Room created successfully', 201);
   } catch (error) {

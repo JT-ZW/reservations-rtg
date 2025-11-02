@@ -4,8 +4,8 @@ import { useEffect } from 'react';
 
 /**
  * Fetch Interceptor Component
- * Patches the global fetch to add cache control headers
- * This prevents browser caching of API responses
+ * 1. Adds cache control headers to prevent stale data
+ * 2. Intercepts 401 errors and redirects to login
  */
 export default function FetchInterceptor() {
   useEffect(() => {
@@ -15,8 +15,8 @@ export default function FetchInterceptor() {
     // Store original fetch
     const originalFetch = window.fetch;
 
-    // Override fetch to add cache control
-    window.fetch = function(...args) {
+    // Override fetch to add cache control and handle auth errors
+    window.fetch = async function(...args) {
       const [resource, config] = args;
 
       // Preserve existing headers and add cache control
@@ -50,7 +50,24 @@ export default function FetchInterceptor() {
         },
       };
 
-      return originalFetch(resource, newConfig);
+      try {
+        const response = await originalFetch(resource, newConfig);
+        
+        // Check for authentication errors
+        if (response.status === 401) {
+          console.error('FetchInterceptor: 401 Unauthorized - Session expired');
+          
+          // Only redirect if not already on login page
+          if (!window.location.pathname.startsWith('/login')) {
+            window.location.href = '/login?error=session_expired';
+          }
+        }
+
+        return response;
+      } catch (error) {
+        console.error('FetchInterceptor: Request failed', error);
+        throw error;
+      }
     };
 
     // Cleanup: restore original fetch on unmount

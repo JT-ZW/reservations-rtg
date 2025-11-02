@@ -11,6 +11,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Alert';
+import { Toast } from '@/components/ui/Toast';
 import { useAuth } from '@/lib/auth/auth-context';
 import CapacityIndicator from '@/components/bookings/CapacityIndicator';
 import LineItemsEditor, { LineItem } from '@/components/bookings/LineItemsEditor';
@@ -25,6 +26,11 @@ interface ConflictResponse {
   conflicting_event_name?: string;
 }
 
+interface ToastMessage {
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+}
+
 export default function NewBookingPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -32,6 +38,7 @@ export default function NewBookingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const [conflictCheck, setConflictCheck] = useState<ConflictResponse | null>(null);
 
   // Form data with new structure
@@ -291,11 +298,21 @@ export default function NewBookingPage() {
       }
 
       setSuccess(true);
+      setToast({ 
+        message: `Booking created successfully! Redirecting...`, 
+        type: 'success' 
+      });
+      
       setTimeout(() => {
         router.push(`/bookings/${result.data.id}`);
-      }, 1500);
+      }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+      setToast({ 
+        message: errorMessage, 
+        type: 'error' 
+      });
     } finally {
       setLoading(false);
     }
@@ -322,6 +339,15 @@ export default function NewBookingPage() {
 
   return (
     <DashboardLayout>
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
       <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Create New Booking</h1>

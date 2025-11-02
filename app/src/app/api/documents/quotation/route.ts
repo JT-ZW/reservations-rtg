@@ -6,10 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateQuotation } from '@/lib/documents/pdf-generator';
 import { errorResponse, handleApiError, getAuthenticatedClient } from '@/lib/api/utils';
+import { logAudit, extractRequestContext } from '@/lib/audit/audit-logger';
 
 export async function POST(request: NextRequest) {
   try {
-    const { supabase } = await getAuthenticatedClient();
+    const { supabase, user } = await getAuthenticatedClient();
     const body = await request.json();
     const { bookingId } = body;
 
@@ -95,6 +96,22 @@ export async function POST(request: NextRequest) {
     // Convert blob to buffer
     const arrayBuffer = await pdfBlob.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // Log quotation generation
+    await logAudit({
+      action: 'EXPORT',
+      resourceType: 'document',
+      resourceId: bookingId,
+      resourceName: `Quotation ${documentNumber}`,
+      description: `Generated quotation ${documentNumber} for booking ${booking.booking_number}`,
+      metadata: {
+        document_type: 'quotation',
+        document_number: documentNumber,
+        booking_number: booking.booking_number,
+        amount: booking.final_amount || booking.total_amount,
+        client_name: client?.organization_name,
+      },
+    }, extractRequestContext(request));
 
     // Return PDF as download
     const fileName = `Quotation-${documentNumber}-${booking.booking_number}.pdf`;

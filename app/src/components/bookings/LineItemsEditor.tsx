@@ -36,7 +36,11 @@ export default function LineItemsEditor({ items, onChange, currency = 'USD' }: L
         
         // Recalculate amount when quantity or rate changes
         if (field === 'quantity' || field === 'rate') {
-          updated.amount = updated.quantity * updated.rate;
+          const qty = typeof updated.quantity === 'number' ? updated.quantity : parseFloat(updated.quantity as string) || 0;
+          const rt = typeof updated.rate === 'number' ? updated.rate : parseFloat(updated.rate as string) || 0;
+          updated.quantity = qty;
+          updated.rate = rt;
+          updated.amount = qty * rt;
         }
         
         return updated;
@@ -128,8 +132,16 @@ export default function LineItemsEditor({ items, onChange, currency = 'USD' }: L
                     <td className="px-4 py-3">
                       <input
                         type="number"
-                        value={item.quantity}
-                        onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                        value={item.quantity || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? '' : e.target.value;
+                          updateLineItem(item.id, 'quantity', value);
+                        }}
+                        onBlur={(e) => {
+                          if (e.target.value === '') {
+                            updateLineItem(item.id, 'quantity', 0);
+                          }
+                        }}
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                         min="0"
                         step="0.01"
@@ -139,8 +151,16 @@ export default function LineItemsEditor({ items, onChange, currency = 'USD' }: L
                     <td className="px-4 py-3">
                       <input
                         type="number"
-                        value={item.rate}
-                        onChange={(e) => updateLineItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                        value={item.rate || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? '' : e.target.value;
+                          updateLineItem(item.id, 'rate', value);
+                        }}
+                        onBlur={(e) => {
+                          if (e.target.value === '') {
+                            updateLineItem(item.id, 'rate', 0);
+                          }
+                        }}
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                         min="0"
                         step="0.01"

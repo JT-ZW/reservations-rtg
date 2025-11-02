@@ -15,6 +15,7 @@ import {
   logActivity,
 } from '@/lib/api/utils';
 import { updateBookingSchema } from '@/lib/validations/schemas';
+import { logAudit, extractRequestContext, getObjectDiff } from '@/lib/audit/audit-logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -49,6 +50,7 @@ export async function GET(
         client:clients(*),
         room:rooms(*),
         event_type:event_types(*),
+        created_by_user:users!bookings_created_by_fkey(id, full_name, email),
         booking_addons(
           *,
           addon:addons(*)
@@ -98,7 +100,7 @@ export async function PUT(
       // Get current booking data
       const { data: currentBooking } = await supabase
         .from('bookings')
-        .select('room_id, start_date, end_date, start_time, end_time')
+        .select('*')
         .eq('id', id)
         .single();
 
@@ -125,6 +127,13 @@ export async function PUT(
         }
       }
     }
+    
+    // Get current booking state for change tracking
+    const { data: oldBooking } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('id', id)
+      .single();
     
     // Update booking
     const { data: booking, error } = await supabase
@@ -156,6 +165,26 @@ export async function PUT(
       },
     });
 
+    // Log audit trail with changes
+    if (oldBooking && booking) {
+      await logAudit(
+        {
+          action: 'UPDATE',
+          resourceType: 'booking',
+          resourceId: booking.id,
+          resourceName: booking.event_name,
+          description: `Updated booking ${booking.booking_number}`,
+          changes: getObjectDiff(oldBooking, booking),
+          metadata: {
+            booking_number: booking.booking_number,
+            status: booking.status,
+            total_amount: booking.total_amount,
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
+
     return successResponse(booking, 'Booking updated successfully');
   } catch (error) {
     return handleApiError(error);
@@ -174,7 +203,7 @@ export async function DELETE(
     // Get booking details for logging
     const { data: booking } = await supabase
       .from('bookings')
-      .select('booking_number, event_name')
+      .select('booking_number, event_name, status, total_amount, start_date, end_date, room_id')
       .eq('id', id)
       .single();
 
@@ -200,6 +229,26 @@ export async function DELETE(
           event_name: booking.event_name,
         },
       });
+      
+      // Log audit trail
+      await logAudit(
+        {
+          action: 'DELETE',
+          resourceType: 'booking',
+          resourceId: id,
+          resourceName: booking.event_name,
+          description: `Deleted booking ${booking.booking_number}`,
+          metadata: {
+            booking_number: booking.booking_number,
+            event_name: booking.event_name,
+            status: booking.status,
+            total_amount: booking.total_amount,
+            start_date: booking.start_date,
+            end_date: booking.end_date,
+          },
+        },
+        extractRequestContext(request)
+      );
     }
 
     return successResponse(null, 'Booking deleted successfully');

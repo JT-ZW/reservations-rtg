@@ -51,6 +51,76 @@ export interface Database {
         };
         Relationships: [];
       };
+      audit_logs: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          user_email: string;
+          user_role: string;
+          action: string;
+          resource_type: string;
+          resource_id: string | null;
+          resource_name: string | null;
+          description: string;
+          changes: Json | null;
+          metadata: Json | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          request_method: string | null;
+          request_path: string | null;
+          status: string;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          user_email: string;
+          user_role: string;
+          action: string;
+          resource_type: string;
+          resource_id?: string | null;
+          resource_name?: string | null;
+          description: string;
+          changes?: Json | null;
+          metadata?: Json | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          request_method?: string | null;
+          request_path?: string | null;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          user_email?: string;
+          user_role?: string;
+          action?: string;
+          resource_type?: string;
+          resource_id?: string | null;
+          resource_name?: string | null;
+          description?: string;
+          changes?: Json | null;
+          metadata?: Json | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          request_method?: string | null;
+          request_path?: string | null;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       rooms: {
         Row: {
           id: string;

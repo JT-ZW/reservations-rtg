@@ -17,6 +17,7 @@ import {
 import { updateRoomSchema } from '@/lib/validations/schemas';
 import { requireAnyRole } from '@/lib/auth/server-auth';
 import { UserRole } from '@/types';
+import { logAudit, extractRequestContext, getObjectDiff } from '@/lib/audit/audit-logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -70,6 +71,13 @@ export async function PUT(
     
     const validatedData = updateRoomSchema.parse(body);
     
+    // Get current room state for change tracking
+    const { data: oldRoom } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
     // Update room
     const { data: room, error } = await supabase
       .from('rooms')
@@ -97,6 +105,31 @@ export async function PUT(
       details: { name: room.name, changes: validatedData },
     });
 
+    // Log audit trail with changes
+    if (oldRoom && room) {
+      const rateChanged = oldRoom.rate_per_day !== room.rate_per_day;
+      await logAudit(
+        {
+          action: 'UPDATE',
+          resourceType: 'room',
+          resourceId: room.id,
+          resourceName: room.name,
+          description: rateChanged 
+            ? `Updated room ${room.name} - Rate changed from ${oldRoom.rate_per_day} to ${room.rate_per_day}`
+            : `Updated room ${room.name}`,
+          changes: getObjectDiff(oldRoom, room),
+          metadata: {
+            name: room.name,
+            capacity: room.capacity,
+            rate_per_day: room.rate_per_day,
+            is_available: room.is_available,
+            rate_changed: rateChanged,
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
+
     return successResponse(room, 'Room updated successfully');
   } catch (error) {
     return handleApiError(error);
@@ -114,6 +147,13 @@ export async function DELETE(
     
     const { supabase, user } = await getAuthenticatedClient();
     const { id } = await context.params;
+    
+    // Get room details for logging
+    const { data: room } = await supabase
+      .from('rooms')
+      .select('name, capacity, rate_per_day')
+      .eq('id', id)
+      .single();
     
     // Check if room has bookings
     const { data: bookings } = await supabase
@@ -146,6 +186,25 @@ export async function DELETE(
       entityType: 'room',
       entityId: id,
     });
+
+    // Log audit trail
+    if (room) {
+      await logAudit(
+        {
+          action: 'DELETE',
+          resourceType: 'room',
+          resourceId: id,
+          resourceName: room.name,
+          description: `Deleted room ${room.name}`,
+          metadata: {
+            name: room.name,
+            capacity: room.capacity,
+            rate_per_day: room.rate_per_day,
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
 
     return successResponse(null, 'Room deleted successfully');
   } catch (error) {

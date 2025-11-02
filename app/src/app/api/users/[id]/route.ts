@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/api/utils';
+import { logAudit, extractRequestContext, getObjectDiff } from '@/lib/audit/audit-logger';
 
 export async function GET(
   request: Request,
@@ -75,6 +76,13 @@ export async function PUT(
       );
     }
 
+    // Get current user state for change tracking
+    const { data: oldUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
       updated_by: user.id,
@@ -93,6 +101,30 @@ export async function PUT(
       .single();
 
     if (error) throw error;
+
+    // Log audit trail with changes
+    if (oldUser && updatedUser) {
+      const roleChanged = oldUser.role !== updatedUser.role;
+      await logAudit(
+        {
+          action: 'UPDATE',
+          resourceType: 'user',
+          resourceId: updatedUser.id,
+          resourceName: updatedUser.full_name,
+          description: roleChanged 
+            ? `Updated user ${updatedUser.full_name} - Role changed from ${oldUser.role} to ${updatedUser.role}`
+            : `Updated user ${updatedUser.full_name}`,
+          changes: getObjectDiff(oldUser, updatedUser),
+          metadata: {
+            email: updatedUser.email,
+            role: updatedUser.role,
+            is_active: updatedUser.is_active,
+            role_changed: roleChanged,
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
 
     return NextResponse.json(updatedUser);
   } catch (error) {
@@ -135,6 +167,13 @@ export async function DELETE(
       );
     }
 
+    // Get user details for logging
+    const { data: targetUser } = await supabase
+      .from('users')
+      .select('full_name, email, role')
+      .eq('id', id)
+      .single();
+
     // Soft delete by setting is_active to false
     const { data, error } = await supabase
       .from('users')
@@ -148,6 +187,25 @@ export async function DELETE(
       .single();
 
     if (error) throw error;
+
+    // Log audit trail
+    if (targetUser) {
+      await logAudit(
+        {
+          action: 'DELETE',
+          resourceType: 'user',
+          resourceId: id,
+          resourceName: targetUser.full_name,
+          description: `Deactivated user ${targetUser.full_name} (${targetUser.email})`,
+          metadata: {
+            email: targetUser.email,
+            role: targetUser.role,
+            action_type: 'soft_delete',
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
 
     return NextResponse.json({ message: 'User deactivated successfully', user: data });
   } catch (error) {

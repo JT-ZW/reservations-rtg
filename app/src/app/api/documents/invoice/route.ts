@@ -6,10 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateInvoice } from '@/lib/documents/pdf-generator';
 import { errorResponse, handleApiError, getAuthenticatedClient } from '@/lib/api/utils';
+import { logAudit, extractRequestContext } from '@/lib/audit/audit-logger';
 
 export async function POST(request: NextRequest) {
   try {
-    const { supabase } = await getAuthenticatedClient();
+    const { supabase, user } = await getAuthenticatedClient();
     const body = await request.json();
     const { bookingId } = body;
 
@@ -100,6 +101,26 @@ export async function POST(request: NextRequest) {
 
     // Return PDF as download
     const fileName = `Invoice-${documentNumber}-${booking.booking_number}.pdf`;
+    
+    // Log invoice generation to audit trail
+    await logAudit(
+      {
+        action: 'EXPORT',
+        resourceType: 'document',
+        resourceId: bookingId,
+        resourceName: `Invoice ${documentNumber}`,
+        description: `Generated invoice ${documentNumber} for booking ${booking.booking_number}`,
+        metadata: {
+          document_type: 'invoice',
+          document_number: documentNumber,
+          booking_number: booking.booking_number,
+          booking_id: bookingId,
+          amount: booking.final_amount || booking.total_amount,
+          client_name: client?.organization_name,
+        },
+      },
+      extractRequestContext(request)
+    );
     
     return new NextResponse(buffer, {
       headers: {

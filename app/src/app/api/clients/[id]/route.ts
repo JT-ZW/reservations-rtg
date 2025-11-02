@@ -15,6 +15,7 @@ import {
   logActivity,
 } from '@/lib/api/utils';
 import { updateClientSchema } from '@/lib/validations/schemas';
+import { logAudit, extractRequestContext, getObjectDiff } from '@/lib/audit/audit-logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -65,6 +66,13 @@ export async function PUT(
     
     const validatedData = updateClientSchema.parse(body);
     
+    // Get current client state for change tracking
+    const { data: oldClient } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
     // Update client
     const { data: client, error } = await supabase
       .from('clients')
@@ -92,6 +100,25 @@ export async function PUT(
       details: { organization_name: client.organization_name, changes: validatedData },
     });
 
+    // Log audit trail with changes
+    if (oldClient && client) {
+      await logAudit(
+        {
+          action: 'UPDATE',
+          resourceType: 'client',
+          resourceId: client.id,
+          resourceName: client.organization_name,
+          description: `Updated client ${client.organization_name}`,
+          changes: getObjectDiff(oldClient, client),
+          metadata: {
+            organization_name: client.organization_name,
+            email: client.email,
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
+
     return successResponse(client, 'Client updated successfully');
   } catch (error) {
     return handleApiError(error);
@@ -106,6 +133,13 @@ export async function DELETE(
   try {
     const { supabase, user } = await getAuthenticatedClient();
     const { id } = await context.params;
+    
+    // Get client details for logging
+    const { data: client } = await supabase
+      .from('clients')
+      .select('organization_name, contact_person, email')
+      .eq('id', id)
+      .single();
     
     // Check if client has bookings
     const { data: bookings } = await supabase
@@ -138,6 +172,25 @@ export async function DELETE(
       entityType: 'client',
       entityId: id,
     });
+
+    // Log audit trail
+    if (client) {
+      await logAudit(
+        {
+          action: 'DELETE',
+          resourceType: 'client',
+          resourceId: id,
+          resourceName: client.organization_name,
+          description: `Deleted client ${client.organization_name}`,
+          metadata: {
+            organization_name: client.organization_name,
+            contact_person: client.contact_person,
+            email: client.email,
+          },
+        },
+        extractRequestContext(request)
+      );
+    }
 
     return successResponse(null, 'Client deleted successfully');
   } catch (error) {

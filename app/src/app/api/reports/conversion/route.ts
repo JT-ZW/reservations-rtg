@@ -12,16 +12,16 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Build query
+    // Build query - filter by start_date (when the booking actually occurs)
     let query = supabase
       .from('bookings')
-      .select('status, final_amount, created_at');
+      .select('status, final_amount, start_date');
 
     if (startDate) {
-      query = query.gte('created_at', startDate);
+      query = query.gte('start_date', startDate);
     }
     if (endDate) {
-      query = query.lte('created_at', endDate);
+      query = query.lte('start_date', endDate);
     }
 
     const { data: bookings, error } = await query;

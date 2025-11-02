@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { logAuthEvent, extractRequestContext } from '@/lib/audit/audit-logger';
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +35,16 @@ export async function POST(request: Request) {
 
       console.log('Session sync: Success', { userId: user.id, email: user.email });
 
+      // Log successful login to audit trail
+      if (event === 'SIGNED_IN') {
+        await logAuthEvent(
+          'LOGIN',
+          user.email || 'unknown',
+          true,
+          extractRequestContext(request)
+        );
+      }
+
       // Return success with user info (don't set cache headers on auth endpoint)
       const response = NextResponse.json({ 
         success: true, 
@@ -45,8 +56,20 @@ export async function POST(request: Request) {
     }
 
     if (event === 'SIGNED_OUT') {
+      // Get user email before signing out
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || 'unknown';
+      
       await supabase.auth.signOut();
       console.log('Session sync: User signed out');
+      
+      // Log logout to audit trail
+      await logAuthEvent(
+        'LOGOUT',
+        userEmail,
+        true,
+        extractRequestContext(request)
+      );
     }
 
     return NextResponse.json({ success: true });

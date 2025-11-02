@@ -17,6 +17,7 @@ import {
   parseQueryParams,
 } from '@/lib/api/utils';
 import { bookingFilterSchema } from '@/lib/validations/schemas';
+import { logAudit, extractRequestContext } from '@/lib/audit/audit-logger';
 
 interface LineItem {
   description: string;
@@ -279,6 +280,26 @@ export async function POST(request: NextRequest) {
         status: booking.status,
       },
     });
+
+    // Log audit trail
+    await logAudit(
+      {
+        action: 'CREATE',
+        resourceType: 'booking',
+        resourceId: booking.id,
+        resourceName: booking.event_name,
+        description: `Created booking ${booking.booking_number} for ${booking.event_name}`,
+        metadata: {
+          booking_number: booking.booking_number,
+          room_id: booking.room_id,
+          start_date: booking.start_date,
+          end_date: booking.end_date,
+          total_amount: booking.total_amount,
+          status: booking.status,
+        },
+      },
+      extractRequestContext(request)
+    );
 
     return successResponse(booking, 'Booking created successfully', 201);
   } catch (error) {

@@ -111,6 +111,25 @@ export default function SettingsPage() {
             </div>
           </Card>
 
+          {/* Audit Logs */}
+          <Card className="group p-7 hover:shadow-elevated transition-all duration-300 cursor-pointer border-l-4 border-l-purple-500" onClick={() => router.push('/admin/audit-logs')}>
+            <div className="flex items-start gap-4">
+              <div className="shrink-0">
+                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                  <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-purple-600 transition-colors">Activity Logs</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Track all user activities and system events
+                </p>
+              </div>
+            </div>
+          </Card>
+
           {/* Documentation */}
           <Card className="group p-7 hover:shadow-elevated transition-all duration-300 cursor-pointer border-l-4 border-l-brand-success" onClick={() => window.open('/TECHNICAL_DOCS.md', '_blank')}>
             <div className="flex items-start gap-4">

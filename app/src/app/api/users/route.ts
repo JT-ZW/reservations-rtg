@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/api/utils';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logAudit, extractRequestContext } from '@/lib/audit/audit-logger';
 
 export async function GET() {
   try {
@@ -126,6 +127,24 @@ export async function POST(request: Request) {
       console.error('User profile creation error:', error);
       throw error;
     }
+
+    // Log audit trail
+    await logAudit(
+      {
+        action: 'CREATE',
+        resourceType: 'user',
+        resourceId: newUser.id,
+        resourceName: newUser.full_name,
+        description: `Created user ${newUser.full_name} (${newUser.email}) with role ${newUser.role}`,
+        metadata: {
+          email: newUser.email,
+          full_name: newUser.full_name,
+          role: newUser.role,
+          is_active: newUser.is_active,
+        },
+      },
+      extractRequestContext(request)
+    );
 
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {

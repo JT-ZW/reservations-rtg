@@ -25,6 +25,42 @@ type RecentBooking = {
   } | null;
 };
 
+type UpcomingEvent = {
+  id: string;
+  booking_number: string;
+  event_name: string;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  client: {
+    organization_name: string;
+  } | null;
+  room: {
+    name: string;
+  } | null;
+};
+
+type Notification = {
+  id: string;
+  type: 'new_booking' | 'expiring_tentative' | 'status_change';
+  message: string;
+  timestamp: string;
+  bookingId: string;
+  priority: 'high' | 'medium' | 'low';
+};
+
+function getDaysUntil(dateString: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const eventDate = new Date(dateString);
+  eventDate.setHours(0, 0, 0, 0);
+  const diffTime = eventDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+
 async function getDashboardMetrics() {
   const supabase = await createClient();
   
@@ -51,6 +87,103 @@ async function getDashboardMetrics() {
       .from('clients')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true);
+
+    // Get upcoming events (next 7 days)
+    const today = new Date();
+    const nextWeek = new Date();
+    nextWeek.setDate(today.getDate() + 7);
+    
+    const { data: upcomingEvents } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        booking_number,
+        event_name,
+        start_date,
+        end_date,
+        start_time,
+        end_time,
+        status,
+        clients!client_id(organization_name),
+        rooms!room_id(name)
+      `)
+      .gte('start_date', today.toISOString().split('T')[0])
+      .lte('start_date', nextWeek.toISOString().split('T')[0])
+      .in('status', ['confirmed', 'tentative'])
+      .order('start_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(5);
+
+    const transformedUpcoming = (upcomingEvents || []).map((event) => ({
+      id: event.id,
+      booking_number: event.booking_number,
+      event_name: event.event_name,
+      start_date: event.start_date,
+      end_date: event.end_date,
+      start_time: event.start_time,
+      end_time: event.end_time,
+      status: event.status,
+      client: (event as any).clients ? { organization_name: (event as any).clients.organization_name } : null,
+      room: (event as any).rooms ? { name: (event as any).rooms.name } : null,
+    })) as UpcomingEvent[];
+
+    // Get notifications
+    const notifications: Notification[] = [];
+
+    // 1. New bookings in last 24 hours
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const { data: newBookings } = await supabase
+      .from('bookings')
+      .select('id, booking_number, event_name, created_at')
+      .gte('created_at', yesterday.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    (newBookings || []).forEach((booking) => {
+      notifications.push({
+        id: `new-${booking.id}`,
+        type: 'new_booking',
+        message: `New booking: ${booking.event_name}`,
+        timestamp: booking.created_at,
+        bookingId: booking.id,
+        priority: 'medium',
+      });
+    });
+
+    // 2. Tentative bookings older than 3 days (need confirmation)
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    
+    const { data: expiringTentative } = await supabase
+      .from('bookings')
+      .select('id, booking_number, event_name, created_at')
+      .eq('status', 'tentative')
+      .lte('created_at', threeDaysAgo.toISOString())
+      .order('created_at', { ascending: true })
+      .limit(3);
+
+    (expiringTentative || []).forEach((booking) => {
+      const daysOld = Math.floor((Date.now() - new Date(booking.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      notifications.push({
+        id: `expiring-${booking.id}`,
+        type: 'expiring_tentative',
+        message: `Tentative booking needs confirmation: ${booking.event_name} (${daysOld} days old)`,
+        timestamp: booking.created_at,
+        bookingId: booking.id,
+        priority: 'high',
+      });
+    });
+
+    // Sort notifications by priority and timestamp
+    notifications.sort((a, b) => {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
 
     // Get recent bookings
     const { data: recentBookings } = await supabase
@@ -83,6 +216,8 @@ async function getDashboardMetrics() {
       confirmedCount: confirmedCount || 0,
       tentativeCount: tentativeCount || 0,
       clientsCount: clientsCount || 0,
+      upcomingEvents: transformedUpcoming,
+      notifications: notifications.slice(0, 5), // Limit to 5 notifications
       recentBookings: transformedBookings,
     };
   } catch (error) {
@@ -92,6 +227,8 @@ async function getDashboardMetrics() {
       confirmedCount: 0,
       tentativeCount: 0,
       clientsCount: 0,
+      upcomingEvents: [],
+      notifications: [],
       recentBookings: [],
     };
   }
@@ -262,6 +399,153 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Two Column Layout for Notifications and Upcoming Events */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Notifications */}
+          <Card className="border-t-4 border-t-red-500 shadow-premium">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <span className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center text-white text-sm">🔔</span>
+                Notifications
+              </CardTitle>
+              <CardDescription>Important updates and alerts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics.notifications.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  <div className="text-4xl mb-3 opacity-50">✅</div>
+                  <p className="font-medium text-sm">All caught up!</p>
+                  <p className="text-xs text-gray-400 mt-1">No new notifications</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {metrics.notifications.map((notification) => (
+                    <a
+                      key={notification.id}
+                      href={`/bookings/${notification.bookingId}`}
+                      className={`group block p-4 rounded-lg border-l-4 hover:shadow-md transition-all duration-200 ${
+                        notification.priority === 'high'
+                          ? 'border-red-500 bg-red-50 hover:bg-red-100'
+                          : notification.priority === 'medium'
+                          ? 'border-yellow-500 bg-yellow-50 hover:bg-yellow-100'
+                          : 'border-blue-500 bg-blue-50 hover:bg-blue-100'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">
+                              {notification.type === 'expiring_tentative' ? '⚠️' : 
+                               notification.type === 'new_booking' ? '📝' : '🔄'}
+                            </span>
+                            <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
+                              notification.priority === 'high'
+                                ? 'bg-red-200 text-red-800'
+                                : notification.priority === 'medium'
+                                ? 'bg-yellow-200 text-yellow-800'
+                                : 'bg-blue-200 text-blue-800'
+                            }`}>
+                              {notification.priority}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 group-hover:text-gray-700">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(notification.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <span className="text-gray-400 group-hover:text-gray-600 transition-colors">→</span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Events */}
+          <Card className="border-t-4 border-t-green-500 shadow-premium">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <span className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center text-white text-sm">📅</span>
+                Upcoming Events
+              </CardTitle>
+              <CardDescription>Next 7 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics.upcomingEvents.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  <div className="text-4xl mb-3 opacity-50">🗓️</div>
+                  <p className="font-medium text-sm">No upcoming events</p>
+                  <p className="text-xs text-gray-400 mt-1">Schedule is clear for the next week</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {metrics.upcomingEvents.map((event) => {
+                    const daysUntil = getDaysUntil(event.start_date);
+                    const isToday = daysUntil === 0;
+                    const isTomorrow = daysUntil === 1;
+                    
+                    return (
+                      <a
+                        key={event.id}
+                        href={`/bookings/${event.id}`}
+                        className="group block p-4 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:shadow-premium transition-all duration-300"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-bold text-gray-900 group-hover:text-green-600 transition-colors truncate">
+                                {event.event_name}
+                              </h4>
+                              <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(event.status)}`}>
+                                {event.status}
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-1 text-sm text-gray-600">
+                              <p className="flex items-center gap-1.5">
+                                <span>🏢</span>
+                                <span className="truncate">{event.client?.organization_name || 'No client'}</span>
+                              </p>
+                              <p className="flex items-center gap-1.5">
+                                <span>🚪</span>
+                                <span>{event.room?.name || 'No room'}</span>
+                              </p>
+                              <p className="flex items-center gap-1.5">
+                                <span>🕐</span>
+                                <span className="font-mono text-xs">{event.start_time} - {event.end_time}</span>
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex-shrink-0 text-right">
+                            {isToday ? (
+                              <div className="bg-red-100 text-red-800 px-3 py-2 rounded-lg font-bold text-sm">
+                                TODAY
+                              </div>
+                            ) : isTomorrow ? (
+                              <div className="bg-orange-100 text-orange-800 px-3 py-2 rounded-lg font-bold text-sm">
+                                TOMORROW
+                              </div>
+                            ) : (
+                              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg">
+                                <div className="text-2xl font-bold">{daysUntil}</div>
+                                <div className="text-xs text-gray-600">days</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Recent Activity */}
         <Card className="border-t-4 border-t-brand-accent shadow-premium">

@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionCheckInterval, setSessionCheckInterval] = useState<NodeJS.Timeout | null>(null);
 
   const syncSessionWithServer = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
     try {
@@ -72,6 +73,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     await loadUserProfile(data.user?.id ?? null);
   }, [supabase, loadUserProfile]);
+
+  // Check session validity periodically
+  const checkSessionValidity = useCallback(async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        console.log('AuthProvider: Session invalid or expired, signing out');
+        await supabase.auth.signOut();
+        setUser(null);
+        window.location.href = '/login';
+        return;
+      }
+
+      // Check if token will expire soon (within 5 minutes)
+      const expiresAt = session.expires_at;
+      if (expiresAt) {
+        const expiresIn = expiresAt - Math.floor(Date.now() / 1000);
+        
+        if (expiresIn < 300) { // Less than 5 minutes
+          console.log('AuthProvider: Token expiring soon, refreshing...');
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError) {
+            console.error('AuthProvider: Failed to refresh session', refreshError);
+            await supabase.auth.signOut();
+            setUser(null);
+            window.location.href = '/login';
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AuthProvider: Session check failed', error);
+    }
+  }, [supabase]);
 
   useEffect(() => {
     let isMounted = true;
@@ -126,18 +162,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      console.log('AuthProvider: Auth state changed', { event, hasSession: !!session });
+
+      // Handle specific auth events
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        setUser(null);
+        setLoading(false);
+        window.location.href = '/login';
+        return;
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('AuthProvider: Token refreshed successfully');
+      }
+
       await syncSessionWithServer(event, session);
       await loadUserProfile(session?.user?.id ?? null);
       setLoading(false);
     });
 
+    // Set up periodic session check (every 2 minutes)
+    const interval = setInterval(checkSessionValidity, 120000);
+    setSessionCheckInterval(interval);
+
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      if (interval) {
+        clearInterval(interval);
+      }
     };
-  }, [supabase, loadUserProfile, syncSessionWithServer]);
+  }, [supabase, loadUserProfile, syncSessionWithServer, checkSessionValidity]);
 
   const handleSignOut = async () => {
+    // Clear session check interval
+    if (sessionCheckInterval) {
+      clearInterval(sessionCheckInterval);
+      setSessionCheckInterval(null);
+    }
+    
     await supabase.auth.signOut();
     setUser(null);
   };

@@ -17,6 +17,7 @@ import {
   parseQueryParams,
 } from '@/lib/api/utils';
 import { clientSchema, paginationSchema } from '@/lib/validations/schemas';
+import { logAudit, extractRequestContext } from '@/lib/audit/audit-logger';
 
 // GET /api/clients
 export async function GET(request: NextRequest) {
@@ -97,6 +98,24 @@ export async function POST(request: NextRequest) {
       entityId: client.id,
       details: { organization_name: client.organization_name },
     });
+
+    // Log audit trail
+    await logAudit(
+      {
+        action: 'CREATE',
+        resourceType: 'client',
+        resourceId: client.id,
+        resourceName: client.organization_name,
+        description: `Created client ${client.organization_name}`,
+        metadata: {
+          organization_name: client.organization_name,
+          contact_person: client.contact_person,
+          email: client.email,
+          phone: client.phone,
+        },
+      },
+      extractRequestContext(request)
+    );
 
     return successResponse(client, 'Client created successfully', 201);
   } catch (error) {
