@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('AuthProvider: Auth state changed', { event, hasSession: !!session });
 
       // Handle specific auth events
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      if (event === 'SIGNED_OUT') {
         setUser(null);
         setLoading(false);
         window.location.href = '/login';
