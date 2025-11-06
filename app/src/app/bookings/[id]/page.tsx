@@ -19,6 +19,7 @@ type Booking = Database['public']['Tables']['bookings']['Row'] & {
   room?: Database['public']['Tables']['rooms']['Row'];
   event_type?: Database['public']['Tables']['event_types']['Row'];
   created_by_user?: { full_name: string; email: string };
+  currency?: string; // 'USD' | 'ZWG'
 };
 
 type BookingAddon = Database['public']['Tables']['booking_addons']['Row'] & {
@@ -174,7 +175,10 @@ export default function BookingDetailsPage({ params }: { params: { id: string } 
     return time.substring(0, 5); // HH:MM
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency: string = 'USD') => {
+    if (currency === 'ZWG') {
+      return `ZWG ${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -402,14 +406,14 @@ export default function BookingDetailsPage({ params }: { params: { id: string } 
                     <div>
                       <div className="font-medium">{addon.addon?.name || 'N/A'}</div>
                       <div className="text-sm text-gray-500">
-                        {addon.quantity} × {formatCurrency(addon.rate)}
+                        {addon.quantity} × {formatCurrency(addon.rate, booking.currency || 'USD')}
                       </div>
                       {addon.notes && (
                         <div className="text-xs text-gray-500 mt-1">{addon.notes}</div>
                       )}
                     </div>
                     <div className="font-semibold">
-                      {formatCurrency(addon.rate * addon.quantity)}
+                      {formatCurrency(addon.rate * addon.quantity, booking.currency || 'USD')}
                     </div>
                   </div>
                 ))}

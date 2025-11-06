@@ -15,6 +15,7 @@ import type { Database } from '@/types/database.types';
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
   client?: Database['public']['Tables']['clients']['Row'];
   room?: Database['public']['Tables']['rooms']['Row'];
+  currency?: string; // 'USD' | 'ZWG'
 };
 
 interface PaginationMeta {
@@ -132,7 +133,10 @@ export default function BookingsPage() {
     });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency: string = 'USD') => {
+    if (currency === 'ZWG') {
+      return `ZWG ${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -335,7 +339,7 @@ export default function BookingsPage() {
                         <BookingStatusBadge status={booking.status} />
                       </TableCell>
                       <TableCell className="font-medium whitespace-nowrap">
-                        {formatCurrency(booking.final_amount)}
+                        {formatCurrency(booking.final_amount, booking.currency || 'USD')}
                       </TableCell>
                       <TableCell>
                         <Link href={`/bookings/${booking.id}`}>
