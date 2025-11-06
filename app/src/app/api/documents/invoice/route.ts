@@ -99,8 +99,11 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await pdfBlob.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Return PDF as download
-    const fileName = `Invoice-${documentNumber}-${booking.booking_number}.pdf`;
+    // Create descriptive filename: EventName_ClientName_Date.pdf
+    const eventName = event_type?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Event';
+    const clientName = client?.organization_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Client';
+    const bookingDate = new Date(booking.start_date).toISOString().split('T')[0];
+    const fileName = `${eventName}_${clientName}_${bookingDate}.pdf`;
     
     // Log invoice generation to audit trail
     await logAudit(
