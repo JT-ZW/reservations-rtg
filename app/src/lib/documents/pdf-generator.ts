@@ -11,6 +11,7 @@ type Booking = Database['public']['Tables']['bookings']['Row'] & {
   client?: Database['public']['Tables']['clients']['Row'];
   room?: Database['public']['Tables']['rooms']['Row'];
   event_type?: Database['public']['Tables']['event_types']['Row'];
+  currency?: string; // 'USD' | 'ZWG'
 };
 
 type BookingAddon = {
@@ -39,8 +40,14 @@ const COLORS = {
 /**
  * Format currency
  */
-function formatCurrency(amount: number): string {
-  return `$${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+function formatCurrency(amount: number, currency: string = 'USD'): string {
+  const formattedAmount = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  if (currency === 'ZWG') {
+    return `ZWG ${formattedAmount}`;
+  }
+  
+  return `$${formattedAmount}`;
 }
 
 /**
@@ -127,6 +134,9 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
   const doc = new jsPDF();
   const { booking, addons, documentNumber } = data;
   
+  // Get currency from booking
+  const currency = booking.currency || 'USD';
+  
   // Header
   addHeader(doc, 'quotation');
   
@@ -205,8 +215,8 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
     'Room Rental',
     `${booking.room?.name || 'N/A'}`,
     numberOfDays.toString(),
-    formatCurrency(booking.room?.rate_per_day || 0),
-    formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays),
+    formatCurrency(booking.room?.rate_per_day || 0, currency),
+    formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays, currency),
   ]);
   
   // Add-ons
@@ -215,8 +225,8 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
       addon.addon?.name || 'N/A',
       addon.notes || '-',
       addon.quantity.toString(),
-      formatCurrency(addon.rate),
-      formatCurrency(addon.rate * addon.quantity),
+      formatCurrency(addon.rate, currency),
+      formatCurrency(addon.rate * addon.quantity, currency),
     ]);
   });
   
@@ -253,12 +263,12 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
   doc.setFontSize(10);
   
   doc.text('Subtotal:', summaryX, yPos);
-  doc.text(formatCurrency(booking.total_amount), 190, yPos, { align: 'right' });
+  doc.text(formatCurrency(booking.total_amount, currency), 190, yPos, { align: 'right' });
   
   if (booking.discount_amount > 0) {
     yPos += 6;
     doc.text('Discount:', summaryX, yPos);
-    doc.text(`-${formatCurrency(booking.discount_amount)}`, 190, yPos, { align: 'right' });
+    doc.text(`-${formatCurrency(booking.discount_amount, currency)}`, 190, yPos, { align: 'right' });
   }
   
   yPos += 8;
@@ -269,7 +279,7 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('TOTAL:', summaryX, yPos);
-  doc.text(formatCurrency(booking.final_amount), 190, yPos, { align: 'right' });
+  doc.text(formatCurrency(booking.final_amount, currency), 190, yPos, { align: 'right' });
   
   // Terms and conditions
   yPos += 15;
@@ -328,6 +338,9 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
 export async function generateInvoice(data: DocumentData): Promise<Blob> {
   const doc = new jsPDF();
   const { booking, addons, documentNumber } = data;
+  
+  // Get currency from booking
+  const currency = booking.currency || 'USD';
   
   // Header
   addHeader(doc, 'invoice');
@@ -416,8 +429,8 @@ export async function generateInvoice(data: DocumentData): Promise<Blob> {
     'Room Rental',
     `${booking.room?.name || 'N/A'}`,
     numberOfDays.toString(),
-    formatCurrency(booking.room?.rate_per_day || 0),
-    formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays),
+    formatCurrency(booking.room?.rate_per_day || 0, currency),
+    formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays, currency),
   ]);
   
   // Add-ons
@@ -426,8 +439,8 @@ export async function generateInvoice(data: DocumentData): Promise<Blob> {
       addon.addon?.name || 'N/A',
       addon.notes || '-',
       addon.quantity.toString(),
-      formatCurrency(addon.rate),
-      formatCurrency(addon.rate * addon.quantity),
+      formatCurrency(addon.rate, currency),
+      formatCurrency(addon.rate * addon.quantity, currency),
     ]);
   });
   
@@ -464,12 +477,12 @@ export async function generateInvoice(data: DocumentData): Promise<Blob> {
   doc.setFontSize(10);
   
   doc.text('Subtotal:', summaryX, yPos);
-  doc.text(formatCurrency(booking.total_amount), 190, yPos, { align: 'right' });
+  doc.text(formatCurrency(booking.total_amount, currency), 190, yPos, { align: 'right' });
   
   if (booking.discount_amount > 0) {
     yPos += 6;
     doc.text('Discount:', summaryX, yPos);
-    doc.text(`-${formatCurrency(booking.discount_amount)}`, 190, yPos, { align: 'right' });
+    doc.text(`-${formatCurrency(booking.discount_amount, currency)}`, 190, yPos, { align: 'right' });
   }
   
   yPos += 8;
@@ -480,7 +493,7 @@ export async function generateInvoice(data: DocumentData): Promise<Blob> {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('AMOUNT DUE:', summaryX, yPos);
-  doc.text(formatCurrency(booking.final_amount), 190, yPos, { align: 'right' });
+  doc.text(formatCurrency(booking.final_amount, currency), 190, yPos, { align: 'right' });
   
   // Payment information
   yPos += 15;
