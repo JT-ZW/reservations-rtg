@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
 
     // Build query - get bookings with event type joined
     let query = supabase
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
         final_amount,
         number_of_attendees,
         start_date,
+        currency,
         event_types!event_type_id (name)
       `);
 
@@ -42,6 +44,11 @@ export async function GET(request: Request) {
     }
     if (endDate) {
       query = query.lte('start_date', endDate);
+    }
+    
+    // Apply currency filter
+    if (currency && currency !== 'ALL') {
+      query = query.eq('currency', currency);
     }
 
     const { data: bookings, error } = await query;

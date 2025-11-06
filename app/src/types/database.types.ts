@@ -227,6 +227,7 @@ export interface Database {
           total_amount: number;
           discount_amount: number;
           final_amount: number;
+          currency: string;
           notes: string | null;
           special_requirements: string | null;
           cancellation_reason: string | null;
@@ -255,6 +256,7 @@ export interface Database {
           total_amount: number;
           discount_amount?: number;
           final_amount: number;
+          currency?: string;
           notes?: string | null;
           special_requirements?: string | null;
           cancellation_reason?: string | null;
@@ -283,6 +285,7 @@ export interface Database {
           total_amount?: number;
           discount_amount?: number;
           final_amount?: number;
+          currency?: string;
           notes?: string | null;
           special_requirements?: string | null;
           cancellation_reason?: string | null;

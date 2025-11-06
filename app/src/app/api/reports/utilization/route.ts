@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
 
     // Calculate total days in period
     let totalDays = 30; // default
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
     for (const room of rooms || []) {
       let bookingsQuery = supabase
         .from('bookings')
-        .select('status, final_amount, number_of_attendees, start_date, end_date')
+        .select('status, final_amount, number_of_attendees, start_date, end_date, currency')
         .eq('room_id', room.id);
 
       // Apply date filters
@@ -56,6 +57,11 @@ export async function GET(request: Request) {
       }
       if (endDate) {
         bookingsQuery = bookingsQuery.lte('start_date', endDate);
+      }
+      
+      // Apply currency filter
+      if (currency && currency !== 'ALL') {
+        bookingsQuery = bookingsQuery.eq('currency', currency);
       }
 
       const { data: bookings, error: bookingsError } = await bookingsQuery;

@@ -79,6 +79,7 @@ export default function ReportsPage() {
     startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
     endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
   });
+  const [currency, setCurrency] = useState<'ALL' | 'USD' | 'ZWG'>('ALL');
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'year'>('day');
 
   // Revenue data
@@ -129,8 +130,9 @@ export default function ReportsPage() {
   });
 
   const fetchRevenueReport = async () => {
+    const currencyParam = currency !== 'ALL' ? `&currency=${currency}` : '';
     const response = await fetch(
-      `/api/reports/revenue?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&groupBy=${groupBy}`
+      `/api/reports/revenue?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&groupBy=${groupBy}${currencyParam}`
     );
     if (response.ok) {
       const result = await response.json();
@@ -140,8 +142,9 @@ export default function ReportsPage() {
   };
 
   const fetchUtilizationReport = async () => {
+    const currencyParam = currency !== 'ALL' ? `&currency=${currency}` : '';
     const response = await fetch(
-      `/api/reports/utilization?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`
+      `/api/reports/utilization?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}${currencyParam}`
     );
     if (response.ok) {
       const result = await response.json();
@@ -151,7 +154,8 @@ export default function ReportsPage() {
   };
 
   const fetchClientAnalytics = async () => {
-    const response = await fetch('/api/reports/clients?limit=10');
+    const currencyParam = currency !== 'ALL' ? `&currency=${currency}` : '';
+    const response = await fetch(`/api/reports/clients?limit=10${currencyParam}`);
     if (response.ok) {
       const result = await response.json();
       setClientData(result.data);
@@ -160,7 +164,8 @@ export default function ReportsPage() {
   };
 
   const fetchEventTypeAnalytics = async () => {
-    const response = await fetch('/api/reports/event-types');
+    const currencyParam = currency !== 'ALL' ? `?currency=${currency}` : '';
+    const response = await fetch(`/api/reports/event-types${currencyParam}`);
     if (response.ok) {
       const result = await response.json();
       setEventTypeData(result.data);
@@ -169,7 +174,8 @@ export default function ReportsPage() {
   };
 
   const fetchConversionReport = async () => {
-    const response = await fetch('/api/reports/conversion');
+    const currencyParam = currency !== 'ALL' ? `?currency=${currency}` : '';
+    const response = await fetch(`/api/reports/conversion${currencyParam}`);
     if (response.ok) {
       const result = await response.json();
       setConversionData(result.data);
@@ -196,7 +202,7 @@ export default function ReportsPage() {
     };
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, groupBy]);
+  }, [dateRange, groupBy, currency]);
 
   const handleQuickDateRange = (days: number) => {
     const end = new Date();
@@ -214,7 +220,10 @@ export default function ReportsPage() {
     });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, curr: string = currency) => {
+    if (curr === 'ZWG') {
+      return `ZWG ${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -292,8 +301,8 @@ export default function ReportsPage() {
       {/* Date Range Filter */}
       <Card>
         <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Date Range & Grouping</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <h3 className="text-lg font-semibold mb-4">Date Range, Grouping & Currency</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
               <input
@@ -323,6 +332,18 @@ export default function ReportsPage() {
                 <option value="week">Weekly</option>
                 <option value="month">Monthly</option>
                 <option value="year">Yearly</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value as 'ALL' | 'USD' | 'ZWG')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="ALL">All Currencies</option>
+                <option value="USD">USD Only</option>
+                <option value="ZWG">ZWG Only</option>
               </select>
             </div>
             <div className="flex items-end gap-2 flex-wrap">

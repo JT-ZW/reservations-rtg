@@ -11,17 +11,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
 
     // Build query - filter by start_date (when the booking actually occurs)
     let query = supabase
       .from('bookings')
-      .select('status, final_amount, start_date');
+      .select('status, final_amount, start_date, currency');
 
     if (startDate) {
       query = query.gte('start_date', startDate);
     }
     if (endDate) {
       query = query.lte('start_date', endDate);
+    }
+    
+    // Apply currency filter
+    if (currency && currency !== 'ALL') {
+      query = query.eq('currency', currency);
     }
 
     const { data: bookings, error } = await query;

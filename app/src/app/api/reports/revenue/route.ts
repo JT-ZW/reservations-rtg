@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const groupBy = searchParams.get('groupBy') || 'day'; // day, week, month, year
+    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
 
     if (!startDate || !endDate) {
       return NextResponse.json(
@@ -26,14 +27,19 @@ export async function GET(request: Request) {
       );
     }
 
-    // Fetch bookings in date range
-    const { data: bookings, error } = await supabase
+    // Build query with optional currency filter
+    let query = supabase
       .from('bookings')
-      .select('start_date, final_amount, status')
+      .select('start_date, final_amount, status, currency')
       .gte('start_date', startDate)
       .lte('start_date', endDate)
-      .in('status', ['confirmed', 'completed'])
-      .order('start_date');
+      .in('status', ['confirmed', 'completed']);
+    
+    if (currency && currency !== 'ALL') {
+      query = query.eq('currency', currency);
+    }
+    
+    const { data: bookings, error } = await query.order('start_date');
 
     if (error) throw error;
 

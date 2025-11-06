@@ -93,6 +93,7 @@ export interface Booking {
   status: BookingStatus;
   number_of_attendees: number;
   total_amount: number;
+  currency?: string; // 'USD' or 'ZWG'
   notes?: string;
   created_by: string;
   updated_by?: string;
