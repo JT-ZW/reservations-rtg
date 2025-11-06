@@ -31,8 +31,11 @@ export default function GenerateQuotationButton({ bookingId }: GenerateQuotation
       // Generate PDF
       const pdf = generateQuotationPDF(data);
 
-      // Download PDF
-      const fileName = `PROFORMA_INVOICE_${data.booking.booking_number}_${new Date().toISOString().split('T')[0]}.pdf`;
+      // Create descriptive filename: EventName_ClientName_Date.pdf
+      const eventName = data.booking.event_type?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Event';
+      const clientName = data.booking.client?.organization_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Client';
+      const bookingDate = new Date(data.booking.start_date).toISOString().split('T')[0];
+      const fileName = `${eventName}_${clientName}_${bookingDate}.pdf`;
       pdf.save(fileName);
 
     } catch (error) {
