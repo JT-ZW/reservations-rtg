@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
         client: client || undefined,
         room: room || undefined,
         event_type: event_type || undefined,
+        line_items: booking.line_items as Array<{description: string; quantity: number; rate: number; amount: number}> | undefined,
       },
       addons,
       documentNumber,
