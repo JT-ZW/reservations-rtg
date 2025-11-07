@@ -7,11 +7,19 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Database } from '@/types/database.types';
 
+type LineItem = {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+};
+
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
   client?: Database['public']['Tables']['clients']['Row'];
   room?: Database['public']['Tables']['rooms']['Row'];
   event_type?: Database['public']['Tables']['event_types']['Row'];
   currency?: string; // 'USD' | 'ZWG'
+  line_items?: LineItem[]; // JSONB array of line items
 };
 
 type BookingAddon = {
@@ -210,25 +218,40 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
   
   const tableData: (string | number)[][] = [];
   
-  // Room rental
-  tableData.push([
-    'Room Rental',
-    `${booking.room?.name || 'N/A'}`,
-    numberOfDays.toString(),
-    formatCurrency(booking.room?.rate_per_day || 0, currency),
-    formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays, currency),
-  ]);
-  
-  // Add-ons
-  addons.forEach(addon => {
+  // Check if line_items exist and are not empty
+  if (booking.line_items && Array.isArray(booking.line_items) && booking.line_items.length > 0) {
+    // Use line items from booking
+    booking.line_items.forEach((item: LineItem) => {
+      tableData.push([
+        item.description || 'N/A',
+        '-', // No additional description column for line items
+        item.quantity.toString(),
+        formatCurrency(item.rate, currency),
+        formatCurrency(item.amount, currency),
+      ]);
+    });
+  } else {
+    // Fallback to legacy room rental + addons approach
+    // Room rental
     tableData.push([
-      addon.addon?.name || 'N/A',
-      addon.notes || '-',
-      addon.quantity.toString(),
-      formatCurrency(addon.rate, currency),
-      formatCurrency(addon.rate * addon.quantity, currency),
+      'Room Rental',
+      `${booking.room?.name || 'N/A'}`,
+      numberOfDays.toString(),
+      formatCurrency(booking.room?.rate_per_day || 0, currency),
+      formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays, currency),
     ]);
-  });
+    
+    // Add-ons
+    addons.forEach(addon => {
+      tableData.push([
+        addon.addon?.name || 'N/A',
+        addon.notes || '-',
+        addon.quantity.toString(),
+        formatCurrency(addon.rate, currency),
+        formatCurrency(addon.rate * addon.quantity, currency),
+      ]);
+    });
+  }
   
   autoTable(doc, {
     startY: yPos,
@@ -424,25 +447,40 @@ export async function generateInvoice(data: DocumentData): Promise<Blob> {
   
   const tableData: (string | number)[][] = [];
   
-  // Room rental
-  tableData.push([
-    'Room Rental',
-    `${booking.room?.name || 'N/A'}`,
-    numberOfDays.toString(),
-    formatCurrency(booking.room?.rate_per_day || 0, currency),
-    formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays, currency),
-  ]);
-  
-  // Add-ons
-  addons.forEach(addon => {
+  // Check if line_items exist and are not empty
+  if (booking.line_items && Array.isArray(booking.line_items) && booking.line_items.length > 0) {
+    // Use line items from booking
+    booking.line_items.forEach((item: LineItem) => {
+      tableData.push([
+        item.description || 'N/A',
+        '-', // No additional description column for line items
+        item.quantity.toString(),
+        formatCurrency(item.rate, currency),
+        formatCurrency(item.amount, currency),
+      ]);
+    });
+  } else {
+    // Fallback to legacy room rental + addons approach
+    // Room rental
     tableData.push([
-      addon.addon?.name || 'N/A',
-      addon.notes || '-',
-      addon.quantity.toString(),
-      formatCurrency(addon.rate, currency),
-      formatCurrency(addon.rate * addon.quantity, currency),
+      'Room Rental',
+      `${booking.room?.name || 'N/A'}`,
+      numberOfDays.toString(),
+      formatCurrency(booking.room?.rate_per_day || 0, currency),
+      formatCurrency((booking.room?.rate_per_day || 0) * numberOfDays, currency),
     ]);
-  });
+    
+    // Add-ons
+    addons.forEach(addon => {
+      tableData.push([
+        addon.addon?.name || 'N/A',
+        addon.notes || '-',
+        addon.quantity.toString(),
+        formatCurrency(addon.rate, currency),
+        formatCurrency(addon.rate * addon.quantity, currency),
+      ]);
+    });
+  }
   
   autoTable(doc, {
     startY: yPos,

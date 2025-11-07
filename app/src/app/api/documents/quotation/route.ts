@@ -80,6 +80,14 @@ export async function POST(request: NextRequest) {
 
     const documentNumber = `QT-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
 
+    // Debug: Log booking data
+    console.log('Quotation generation debug:', {
+      bookingId,
+      currency: booking.currency,
+      line_items: booking.line_items,
+      final_amount: booking.final_amount
+    });
+
     // Generate PDF
     const pdfBlob = await generateQuotation({
       booking: {

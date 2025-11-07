@@ -376,17 +376,17 @@ export default function BookingDetailsPage({ params }: { params: { id: string } 
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Total Amount</span>
-                  <span className="font-medium">{formatCurrency(booking.total_amount)}</span>
+                  <span className="font-medium">{formatCurrency(booking.total_amount, booking.currency || 'USD')}</span>
                 </div>
                 {booking.discount_amount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Discount</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(booking.discount_amount)}</span>
+                    <span className="font-medium text-red-600">-{formatCurrency(booking.discount_amount, booking.currency || 'USD')}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t pt-2">
                   <span className="font-semibold">Final Amount</span>
-                  <span className="text-xl font-bold text-amber-600">{formatCurrency(booking.final_amount)}</span>
+                  <span className="text-xl font-bold text-amber-600">{formatCurrency(booking.final_amount, booking.currency || 'USD')}</span>
                 </div>
               </div>
             </CardContent>

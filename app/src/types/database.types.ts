@@ -228,6 +228,7 @@ export interface Database {
           discount_amount: number;
           final_amount: number;
           currency: string;
+          line_items: unknown; // JSONB array
           notes: string | null;
           special_requirements: string | null;
           cancellation_reason: string | null;
@@ -257,6 +258,7 @@ export interface Database {
           discount_amount?: number;
           final_amount: number;
           currency?: string;
+          line_items?: unknown; // JSONB array
           notes?: string | null;
           special_requirements?: string | null;
           cancellation_reason?: string | null;
@@ -286,6 +288,7 @@ export interface Database {
           discount_amount?: number;
           final_amount?: number;
           currency?: string;
+          line_items?: unknown; // JSONB array
           notes?: string | null;
           special_requirements?: string | null;
           cancellation_reason?: string | null;
