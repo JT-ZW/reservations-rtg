@@ -79,7 +79,7 @@ export default function ReportsPage() {
     startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
     endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
   });
-  const [currency, setCurrency] = useState<'ALL' | 'USD' | 'ZWG'>('ALL');
+  const [currency, setCurrency] = useState<'USD' | 'ZWG'>('USD');
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'year'>('day');
 
   // Revenue data
@@ -130,9 +130,8 @@ export default function ReportsPage() {
   });
 
   const fetchRevenueReport = async () => {
-    const currencyParam = currency !== 'ALL' ? `&currency=${currency}` : '';
     const response = await fetch(
-      `/api/reports/revenue?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&groupBy=${groupBy}${currencyParam}`
+      `/api/reports/revenue?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&groupBy=${groupBy}&currency=${currency}`
     );
     if (response.ok) {
       const result = await response.json();
@@ -142,9 +141,8 @@ export default function ReportsPage() {
   };
 
   const fetchUtilizationReport = async () => {
-    const currencyParam = currency !== 'ALL' ? `&currency=${currency}` : '';
     const response = await fetch(
-      `/api/reports/utilization?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}${currencyParam}`
+      `/api/reports/utilization?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&currency=${currency}`
     );
     if (response.ok) {
       const result = await response.json();
@@ -154,8 +152,7 @@ export default function ReportsPage() {
   };
 
   const fetchClientAnalytics = async () => {
-    const currencyParam = currency !== 'ALL' ? `&currency=${currency}` : '';
-    const response = await fetch(`/api/reports/clients?limit=10${currencyParam}`);
+    const response = await fetch(`/api/reports/clients?limit=10&currency=${currency}`);
     if (response.ok) {
       const result = await response.json();
       setClientData(result.data);
@@ -164,8 +161,7 @@ export default function ReportsPage() {
   };
 
   const fetchEventTypeAnalytics = async () => {
-    const currencyParam = currency !== 'ALL' ? `?currency=${currency}` : '';
-    const response = await fetch(`/api/reports/event-types${currencyParam}`);
+    const response = await fetch(`/api/reports/event-types?currency=${currency}`);
     if (response.ok) {
       const result = await response.json();
       setEventTypeData(result.data);
@@ -174,8 +170,7 @@ export default function ReportsPage() {
   };
 
   const fetchConversionReport = async () => {
-    const currencyParam = currency !== 'ALL' ? `?currency=${currency}` : '';
-    const response = await fetch(`/api/reports/conversion${currencyParam}`);
+    const response = await fetch(`/api/reports/conversion?currency=${currency}`);
     if (response.ok) {
       const result = await response.json();
       setConversionData(result.data);
@@ -338,12 +333,11 @@ export default function ReportsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
               <select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value as 'ALL' | 'USD' | 'ZWG')}
+                onChange={(e) => setCurrency(e.target.value as 'USD' | 'ZWG')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
               >
-                <option value="ALL">All Currencies</option>
-                <option value="USD">USD Only</option>
-                <option value="ZWG">ZWG Only</option>
+                <option value="USD">USD ($)</option>
+                <option value="ZWG">ZWG</option>
               </select>
             </div>
             <div className="flex items-end gap-2 flex-wrap">

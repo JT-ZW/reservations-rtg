@@ -21,7 +21,15 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
-    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
+    const currency = searchParams.get('currency');
+
+    // Validate currency parameter
+    if (!currency || (currency !== 'USD' && currency !== 'ZWG')) {
+      return NextResponse.json(
+        { error: 'Currency parameter is required and must be either USD or ZWG' },
+        { status: 400 }
+      );
+    }
 
     // Fetch all clients
     const { data: clients, error: clientsError } = await supabase
@@ -35,15 +43,11 @@ export async function GET(request: Request) {
     const clientAnalytics: ClientAnalytics[] = [];
 
     for (const client of clients || []) {
-      let bookingsQuery = supabase
+      const bookingsQuery = supabase
         .from('bookings')
         .select('status, final_amount, created_at, currency')
-        .eq('client_id', client.id);
-      
-      // Apply currency filter
-      if (currency && currency !== 'ALL') {
-        bookingsQuery = bookingsQuery.eq('currency', currency);
-      }
+        .eq('client_id', client.id)
+        .eq('currency', currency);
       
       const { data: bookings, error: bookingsError } = await bookingsQuery.order('created_at', { ascending: false });
 

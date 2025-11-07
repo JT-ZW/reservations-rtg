@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const groupBy = searchParams.get('groupBy') || 'day'; // day, week, month, year
-    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
+    const currency = searchParams.get('currency'); // USD or ZWG
 
     if (!startDate || !endDate) {
       return NextResponse.json(
@@ -27,19 +27,22 @@ export async function GET(request: Request) {
       );
     }
 
-    // Build query with optional currency filter
-    let query = supabase
+    if (!currency || (currency !== 'USD' && currency !== 'ZWG')) {
+      return NextResponse.json(
+        { error: 'currency is required and must be either USD or ZWG' },
+        { status: 400 }
+      );
+    }
+
+    // Build query with currency filter
+    const { data: bookings, error } = await supabase
       .from('bookings')
       .select('start_date, final_amount, status, currency')
       .gte('start_date', startDate)
       .lte('start_date', endDate)
-      .in('status', ['confirmed', 'completed']);
-    
-    if (currency && currency !== 'ALL') {
-      query = query.eq('currency', currency);
-    }
-    
-    const { data: bookings, error } = await query.order('start_date');
+      .eq('currency', currency)
+      .in('status', ['confirmed', 'completed'])
+      .order('start_date');
 
     if (error) throw error;
 

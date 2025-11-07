@@ -24,7 +24,15 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    const currency = searchParams.get('currency'); // USD, ZWG, or null for all
+    const currency = searchParams.get('currency');
+
+    // Validate currency parameter
+    if (!currency || (currency !== 'USD' && currency !== 'ZWG')) {
+      return NextResponse.json(
+        { error: 'Currency parameter is required and must be either USD or ZWG' },
+        { status: 400 }
+      );
+    }
 
     // Build query - get bookings with event type joined
     let query = supabase
@@ -36,7 +44,8 @@ export async function GET(request: Request) {
         start_date,
         currency,
         event_types!event_type_id (name)
-      `);
+      `)
+      .eq('currency', currency);
 
     // Apply date filters if provided
     if (startDate) {
@@ -44,11 +53,6 @@ export async function GET(request: Request) {
     }
     if (endDate) {
       query = query.lte('start_date', endDate);
-    }
-    
-    // Apply currency filter
-    if (currency && currency !== 'ALL') {
-      query = query.eq('currency', currency);
     }
 
     const { data: bookings, error } = await query;
@@ -68,8 +72,8 @@ export async function GET(request: Request) {
       attendees: number;
     }>();
 
-    bookings?.forEach((booking: any) => {
-      const eventType = booking.event_types?.name || 'Unspecified';
+    bookings?.forEach((booking) => {
+      const eventType = (booking as { event_types?: { name?: string } | null }).event_types?.name || 'Unspecified';
       const current = eventTypeMap.get(eventType) || {
         total: 0,
         confirmed: 0,
