@@ -8,7 +8,7 @@ import { Alert } from '@/components/ui/Alert';
 import { useAuth } from '@/lib/auth/auth-context';
 
 export default function DocumentsPage() {
-  const { user } = useAuth();
+  useAuth(); // Ensure user is authenticated
   const [generating, setGenerating] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -18,6 +18,37 @@ export default function DocumentsPage() {
 
   const handleGenerateInvoice = () => {
     setMessage({ type: 'success', text: 'To generate an invoice, please create or view a confirmed booking and use the "Generate Invoice" button.' });
+  };
+
+  const handleGenerateDailyReport = async (format: 'pdf' | 'excel') => {
+    try {
+      setGenerating(true);
+      setMessage(null);
+
+      const response = await fetch(`/api/documents/daily-report?format=${format}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate daily report');
+      }
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Daily_Report_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setMessage({ type: 'success', text: `Daily report generated successfully as ${format.toUpperCase()}!` });
+    } catch (error) {
+      console.error('Error generating daily report:', error);
+      setMessage({ type: 'error', text: 'Failed to generate daily report. Please try again.' });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -38,11 +69,48 @@ export default function DocumentsPage() {
         )}
 
         {/* Document Templates */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Daily Report Card */}
+          <Card className="p-6">
+            <div className="flex items-start">
+              <div className="shrink-0">
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="ml-4 flex-1">
+                <h3 className="text-lg font-medium text-gray-900">Daily Report</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Generate tomorrow&apos;s events summary with all bookings, venues, and totals.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <Button 
+                    onClick={() => handleGenerateDailyReport('pdf')}
+                    disabled={generating}
+                    size="sm"
+                    variant="primary"
+                  >
+                    📄 PDF
+                  </Button>
+                  <Button 
+                    onClick={() => handleGenerateDailyReport('excel')}
+                    disabled={generating}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    📊 Excel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           {/* Quotation Card */}
           <Card className="p-6">
             <div className="flex items-start">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -70,7 +138,7 @@ export default function DocumentsPage() {
           {/* Invoice Card */}
           <Card className="p-6">
             <div className="flex items-start">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -101,37 +169,49 @@ export default function DocumentsPage() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">How to Generate Documents</h3>
           <div className="space-y-4">
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+              <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
                 <span className="text-amber-700 font-semibold">1</span>
+              </div>
+              <div className="ml-4">
+                <h4 className="font-medium text-gray-900">For Daily Reports</h4>
+                <p className="text-sm text-gray-600">
+                  Click the <strong>PDF</strong> or <strong>Excel</strong> button above to generate tomorrow&apos;s events summary. Available in both formats.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                <span className="text-amber-700 font-semibold">2</span>
               </div>
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">For Quotations</h4>
                 <p className="text-sm text-gray-600">
-                  Go to <strong>Bookings</strong> → View a booking → Click <strong>"Generate Quotation"</strong> button
+                  Go to <strong>Bookings</strong> → View a booking → Click <strong>Generate Quotation</strong> button
                 </p>
               </div>
             </div>
 
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                <span className="text-amber-700 font-semibold">2</span>
+              <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                <span className="text-amber-700 font-semibold">3</span>
               </div>
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">For Invoices</h4>
                 <p className="text-sm text-gray-600">
-                  Go to <strong>Bookings</strong> → View a <strong>confirmed</strong> booking → Click <strong>"Generate Invoice"</strong> button
+                  Go to <strong>Bookings</strong> → View a <strong>confirmed</strong> booking → Click <strong>Generate Invoice</strong> button
                 </p>
               </div>
             </div>
 
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                <span className="text-amber-700 font-semibold">3</span>
+              <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                <span className="text-amber-700 font-semibold">4</span>
               </div>
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">Download</h4>
                 <p className="text-sm text-gray-600">
-                  The document will be generated as a PDF and downloaded automatically to your computer
+                  All documents will be downloaded automatically to your computer in the selected format
                 </p>
               </div>
             </div>
