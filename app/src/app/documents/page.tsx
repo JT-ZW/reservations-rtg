@@ -51,6 +51,37 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleGenerateWeeklyReport = async (format: 'pdf' | 'excel') => {
+    try {
+      setGenerating(true);
+      setMessage(null);
+
+      const response = await fetch(`/api/documents/weekly-report?format=${format}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate weekly report');
+      }
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Weekly_Report_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setMessage({ type: 'success', text: `Weekly report generated successfully as ${format.toUpperCase()}!` });
+    } catch (error) {
+      console.error('Error generating weekly report:', error);
+      setMessage({ type: 'error', text: 'Failed to generate weekly report. Please try again.' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -96,6 +127,43 @@ export default function DocumentsPage() {
                   </Button>
                   <Button 
                     onClick={() => handleGenerateDailyReport('excel')}
+                    disabled={generating}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    📊 Excel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Weekly Report Card */}
+          <Card className="p-6">
+            <div className="flex items-start">
+              <div className="shrink-0">
+                <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+              </div>
+              <div className="ml-4 flex-1">
+                <h3 className="text-lg font-medium text-gray-900">Weekly Report</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Generate next week&apos;s schedule showing all rooms and their bookings Mon-Sun.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <Button 
+                    onClick={() => handleGenerateWeeklyReport('pdf')}
+                    disabled={generating}
+                    size="sm"
+                    variant="primary"
+                  >
+                    📄 PDF
+                  </Button>
+                  <Button 
+                    onClick={() => handleGenerateWeeklyReport('excel')}
                     disabled={generating}
                     size="sm"
                     variant="secondary"
@@ -175,7 +243,7 @@ export default function DocumentsPage() {
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">For Daily Reports</h4>
                 <p className="text-sm text-gray-600">
-                  Click the <strong>PDF</strong> or <strong>Excel</strong> button above to generate tomorrow&apos;s events summary. Available in both formats.
+                  Click the <strong>PDF</strong> or <strong>Excel</strong> button to generate tomorrow&apos;s events summary.
                 </p>
               </div>
             </div>
@@ -183,6 +251,18 @@ export default function DocumentsPage() {
             <div className="flex items-start">
               <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
                 <span className="text-amber-700 font-semibold">2</span>
+              </div>
+              <div className="ml-4">
+                <h4 className="font-medium text-gray-900">For Weekly Reports</h4>
+                <p className="text-sm text-gray-600">
+                  Click the <strong>PDF</strong> or <strong>Excel</strong> button to generate next week&apos;s schedule (Mon-Sun) by room.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                <span className="text-amber-700 font-semibold">3</span>
               </div>
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">For Quotations</h4>
@@ -194,7 +274,7 @@ export default function DocumentsPage() {
 
             <div className="flex items-start">
               <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                <span className="text-amber-700 font-semibold">3</span>
+                <span className="text-amber-700 font-semibold">4</span>
               </div>
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">For Invoices</h4>
@@ -206,7 +286,7 @@ export default function DocumentsPage() {
 
             <div className="flex items-start">
               <div className="shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                <span className="text-amber-700 font-semibold">4</span>
+                <span className="text-amber-700 font-semibold">5</span>
               </div>
               <div className="ml-4">
                 <h4 className="font-medium text-gray-900">Download</h4>

@@ -39,6 +39,8 @@ export async function GET(request: Request) {
         id,
         start_date,
         end_date,
+        start_time,
+        end_time,
         final_amount,
         number_of_attendees,
         status,
@@ -57,7 +59,7 @@ export async function GET(request: Request) {
       `)
       .gte('start_date', tomorrowStart.toISOString())
       .lte('start_date', tomorrowEnd.toISOString())
-      .order('start_date', { ascending: true });
+      .order('start_time', { ascending: true });
 
     if (error) {
       console.error('Error fetching bookings for daily report:', error);
@@ -68,6 +70,7 @@ export async function GET(request: Request) {
     const reportBookings: DailyReportBooking[] = (bookings || []).map((booking) => {
       const bookingData = booking as {
         start_date: string;
+        start_time: string;
         clients?: { organization_name?: string; contact_person?: string } | null;
         event_types?: { name?: string } | null;
         rooms?: { name?: string } | null;
@@ -78,7 +81,8 @@ export async function GET(request: Request) {
         special_requirements?: string | null;
       };
       
-      const startTime = format(new Date(bookingData.start_date), 'HH:mm');
+      // Use the start_time field directly (format: "HH:MM:SS")
+      const startTime = bookingData.start_time ? bookingData.start_time.substring(0, 5) : '00:00';
       
       return {
         time: startTime,
