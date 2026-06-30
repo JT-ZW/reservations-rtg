@@ -6,11 +6,16 @@ import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
+  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Check if redirected due to session expiry
@@ -33,7 +38,16 @@ export default function LoginPage() {
       });
 
       if (authError || !data?.user || !data.session) {
-        setError(authError?.message ?? 'Unable to sign in');
+        // Provide more helpful error messages
+        let errorMessage = authError?.message ?? 'Unable to sign in';
+        
+        if (errorMessage.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. If you were invited to create an account, please check your email and set your password first.';
+        } else if (errorMessage.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and click the invitation link to set your password first.';
+        }
+        
+        setError(errorMessage);
         
         // Log failed login attempt
         try {
@@ -74,6 +88,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex flex-col lg:flex-row font-['Century_Gothic',_sans-serif]">
+        <div className="flex-1 flex items-center justify-center bg-white px-6 py-12 lg:py-0" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row font-['Century_Gothic',_sans-serif]">
@@ -137,7 +159,7 @@ export default function LoginPage() {
             )}
 
             {/* Email Field */}
-            <div>
+            <div suppressHydrationWarning>
               <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
                 Email
               </label>
@@ -151,15 +173,16 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="block w-full px-4 py-3.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-gray-900 text-base bg-white placeholder-gray-400"
                 placeholder="Enter your email"
+                suppressHydrationWarning
               />
             </div>
 
             {/* Password Field */}
-            <div>
+            <div suppressHydrationWarning>
               <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2">
                 Password
               </label>
-              <div className="relative">
+              <div className="relative" suppressHydrationWarning>
                 <input
                   id="password" 
                   name="password" 
@@ -170,6 +193,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="block w-full px-4 py-3.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-accent focus:border-brand-accent transition-all duration-200 text-gray-900 text-base bg-white placeholder-gray-400"
                   placeholder="Enter your password"
+                  suppressHydrationWarning
                 />
               </div>
             </div>

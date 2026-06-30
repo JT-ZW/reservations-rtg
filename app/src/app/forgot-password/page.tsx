@@ -1,15 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Image from 'next/image';
 import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
+  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +41,16 @@ export default function ForgotPasswordPage() {
     }
   };
 
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex flex-col lg:flex-row font-['Century_Gothic',sans-serif]">
+        <div className="flex-1 flex items-center justify-center bg-white px-6 py-12 lg:py-0" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row font-['Century_Gothic',_sans-serif]">
+    <div className="min-h-screen flex flex-col lg:flex-row font-['Century_Gothic',sans-serif]">
       {/* Left Panel - Form */}
       <div className="flex-1 flex items-center justify-center bg-white px-6 py-12 lg:py-0">
         <div className="w-full max-w-md">
@@ -72,7 +85,7 @@ export default function ForgotPasswordPage() {
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-green-900">Check Your Email</h3>
                   <p className="text-sm text-green-800 mt-1">
-                    We've sent a password reset link to <strong>{email}</strong>. 
+                    We&apos;ve sent a password reset link to <strong>{email}</strong>. 
                     Please check your inbox and follow the instructions.
                   </p>
                   <div className="mt-4">

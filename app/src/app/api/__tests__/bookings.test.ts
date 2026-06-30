@@ -21,6 +21,8 @@ jest.mock('@/lib/supabase/client', () => ({
   createClient: () => mockSupabase,
 }))
 
+import { bookingFilterSchema } from '@/lib/validations/schemas';
+
 describe('Bookings API', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -48,6 +50,11 @@ describe('Bookings API', () => {
       expect(mockBookings).toHaveLength(1)
       expect(mockBookings[0].status).toBe('confirmed')
     })
+
+    it('ignores invalid client_id filter values instead of throwing', () => {
+      expect(() => bookingFilterSchema.parse({ client_id: 'new' })).not.toThrow();
+      expect(bookingFilterSchema.parse({ client_id: 'new' }).client_id).toBeUndefined();
+    });
 
     it('filters bookings by status', async () => {
       const mockBookings = [

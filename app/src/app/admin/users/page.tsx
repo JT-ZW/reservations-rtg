@@ -36,6 +36,7 @@ function UsersPageContent() {
     phone: '',
     password: '',
   });
+  const [createdUser, setCreatedUser] = useState<{username: string; password: string} | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
@@ -87,7 +88,17 @@ function UsersPageContent() {
       });
 
       if (response.ok) {
-        setShowCreateModal(false);
+        const result = await response.json();
+        
+        // Show credentials to admin
+        if (result.credentials) {
+          setCreatedUser({
+            username: result.credentials.username,
+            password: result.credentials.temporary_password,
+          });
+        }
+        
+        // Reset form
         setFormData({
           email: '',
           full_name: '',
@@ -95,14 +106,36 @@ function UsersPageContent() {
           phone: '',
           password: '',
         });
+        
+        // Close create modal - credentials modal will show
+        setShowCreateModal(false);
+        
+        // Refresh users list
         fetchUsers();
       } else {
-        const error = await response.json();
-        alert(error.error || 'Failed to create user');
+        const errorData = await response.json();
+        
+        // Show detailed error for soft-deleted users
+        if (errorData.code === 'email_exists') {
+          alert(
+            'Email Already Exists\n\n' +
+            errorData.error + '\n\n' +
+            'Steps to fix:\n' +
+            '1. Go to Supabase Dashboard\n' +
+            '2. Navigate to Authentication → Users\n' +
+            '3. Find and select the user with this email\n' +
+            '4. Click "Delete User"\n' +
+            '5. Check "Permanently delete user" option\n' +
+            '6. Confirm deletion\n' +
+            '7. Try creating the user again'
+          );
+        } else {
+          alert(errorData.error || 'Failed to create user');
+        }
       }
     } catch (error) {
       console.error('Error creating user:', error);
-      alert('Failed to create user');
+      alert('Failed to create user. Please check console for details.');
     } finally {
       setSubmitting(false);
     }
@@ -306,6 +339,103 @@ function UsersPageContent() {
         </div>
       </Card>
 
+      {/* Credentials Display Modal */}
+      {createdUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">User Created Successfully!</h2>
+              <p className="text-gray-600 mt-2">Share these credentials with the user</p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Username (Email)</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 bg-white px-3 py-2 rounded border border-gray-300 text-sm font-mono">
+                      {createdUser.username}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdUser.username);
+                        alert('Username copied!');
+                      }}
+                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded text-sm"
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Temporary Password</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 bg-white px-3 py-2 rounded border border-gray-300 text-sm font-mono">
+                      {createdUser.password}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdUser.password);
+                        alert('Password copied!');
+                      }}
+                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded text-sm"
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <div className="flex gap-2">
+                <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm text-amber-800">
+                  <p className="font-medium">Important Security Notice:</p>
+                  <ul className="list-disc ml-4 mt-1 space-y-1">
+                    <li>Share credentials through a secure channel</li>
+                    <li>User must reset password after first login</li>
+                    <li>This is a one-time display - copy credentials now</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => {
+                  const text = `Username: ${createdUser.username}\nPassword: ${createdUser.password}`;
+                  navigator.clipboard.writeText(text);
+                  alert('Credentials copied to clipboard!');
+                }}
+              >
+                📋 Copy Both
+              </Button>
+              <Button
+                variant="primary"
+                fullWidth
+                onClick={() => {
+                  setCreatedUser(null);
+                  setShowCreateModal(false);
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create User Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -370,17 +500,35 @@ function UsersPageContent() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password <span className="text-red-500">*</span>
+                  Temporary Password <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  minLength={6}
+                  minLength={8}
+                  placeholder="e.g., TempPass123"
                 />
-                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  User will use this to login for the first time and should reset it immediately
+                </p>
+              </div>
+
+              <div className="rounded-md bg-amber-50 p-4 border border-amber-200">
+                <div className="flex">
+                  <div className="shrink-0">
+                    <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-amber-700 font-medium">
+                      Important: Share these credentials securely with the user and ask them to reset their password after first login.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-4">

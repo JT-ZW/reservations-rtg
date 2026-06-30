@@ -5,6 +5,13 @@
 
 import { z } from 'zod';
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
+const optionalUuidSchema = z.string().trim().optional().transform((value) => {
+  if (!value) return undefined;
+  return UUID_REGEX.test(value) ? value : undefined;
+});
+
 // ============================================================
 // Room Schemas
 // ============================================================
@@ -161,7 +168,7 @@ export const paginationSchema = z.object({
 export const bookingFilterSchema = paginationSchema.extend({
   status: z.enum(['tentative', 'confirmed', 'cancelled', 'completed']).optional(),
   room_id: z.string().uuid().optional(),
-  client_id: z.string().uuid().optional(),
+  client_id: optionalUuidSchema,
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   search: z.string().optional(),

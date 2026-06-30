@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { logAuthEvent, extractRequestContext } from '@/lib/audit/audit-logger';
 
 export async function POST(request: Request) {
@@ -35,7 +36,38 @@ export async function POST(request: Request) {
 
       console.log('Session sync: Success', { userId: user.id, email: user.email });
 
-      // Log successful login to audit trail
+      // Ensure a matching row exists in the users table.
+      // This handles users created directly in Supabase Auth who don't yet
+      // have a profile row. We use the service role key to bypass RLS.
+      try {
+        const serviceClient = createServiceClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        );
+
+        const fullName =
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email?.split('@')[0] ||
+          'User';
+
+        await serviceClient.from('users').upsert(
+          {
+            id: user.id,
+            email: user.email!,
+            full_name: fullName,
+            role: 'admin',      // default role for manually-created users
+            is_active: true,
+          },
+          { onConflict: 'id', ignoreDuplicates: true }
+        );
+      } catch (upsertErr) {
+        // Non-fatal — log but don't block login
+        console.error('Session sync: Failed to upsert user profile', upsertErr);
+      }
+
+
       if (event === 'SIGNED_IN') {
         await logAuthEvent(
           'LOGIN',

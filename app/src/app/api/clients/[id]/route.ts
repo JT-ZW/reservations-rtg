@@ -21,6 +21,10 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
+const isValidUuid = (value: string) => UUID_REGEX.test(value);
+
 // GET /api/clients/[id]
 export async function GET(
   request: NextRequest,
@@ -29,6 +33,10 @@ export async function GET(
   try {
     const { supabase } = await getAuthenticatedClient();
     const { id } = await context.params;
+
+    if (!isValidUuid(id)) {
+      return errorResponse('Invalid client ID', 400);
+    }
     
     const { data: client, error } = await supabase
       .from('clients')
@@ -57,6 +65,10 @@ export async function PUT(
   try {
     const { supabase, user } = await getAuthenticatedClient();
     const { id } = await context.params;
+
+    if (!isValidUuid(id)) {
+      return errorResponse('Invalid client ID', 400);
+    }
     
     // Parse and validate request body
     const body = await parseRequestBody(request);
@@ -133,6 +145,10 @@ export async function DELETE(
   try {
     const { supabase, user } = await getAuthenticatedClient();
     const { id } = await context.params;
+
+    if (!isValidUuid(id)) {
+      return errorResponse('Invalid client ID', 400);
+    }
     
     // Get client details for logging
     const { data: client } = await supabase

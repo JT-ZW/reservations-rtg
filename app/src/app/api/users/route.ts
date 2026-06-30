@@ -68,6 +68,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate password strength
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters long' },
+        { status: 400 }
+      );
+    }
+
     // Validate role
     if (!['admin', 'reservations', 'sales', 'finance', 'auditor'].includes(role)) {
       return NextResponse.json(
@@ -90,48 +98,44 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create auth user first using admin client with service role
+    // Create auth user using admin client - invitation flow
     const adminClient = createAdminClient();
     
-    // Generate a temporary password (user will be required to change it)
-    const tempPassword = Math.random().toString(36).slice(-12) + 'Aa1!';
+    // Create auth user with temporary password
+    console.log('Creating user:', email);
     
     const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password,
       email_confirm: true, // Auto-confirm email since admin is creating
       user_metadata: {
         full_name,
         role,
+        phone: phone || null,
       },
     });
 
     if (authError || !authUser.user) {
       console.error('Auth user creation error:', authError);
+      
+      // Handle soft-deleted users
+      if (authError?.code === 'email_exists') {
+        return NextResponse.json(
+          { 
+            error: 'This email is already registered or was previously deleted. To reuse this email, you must permanently delete the user from Supabase Authentication dashboard (Authentication → Users → find user → Delete User → check "Permanently delete").',
+            code: 'email_exists'
+          },
+          { status: 409 }
+        );
+      }
+      
       return NextResponse.json(
         { error: authError?.message || 'Failed to create auth user' },
         { status: 500 }
       );
     }
 
-    // Send invite email using admin API (this sends a proper welcome/invite email)
-    try {
-      const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password`,
-        data: {
-          full_name,
-          role,
-        },
-      });
-      
-      if (inviteError) {
-        console.error('Failed to send invite email:', inviteError);
-        // Don't fail user creation if email fails, just log it
-      }
-    } catch (emailError) {
-      console.error('Email send error:', emailError);
-      // Don't fail user creation if email fails
-    }
+    console.log('Auth user created successfully:', authUser.user.id);
 
     // Create user profile record
     const { data: newUser, error } = await supabase
@@ -149,9 +153,13 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      // If profile creation fails, we should delete the auth user
-      // but for now just log the error
+      // If profile creation fails, delete the auth user to keep consistency
       console.error('User profile creation error:', error);
+      try {
+        await adminClient.auth.admin.deleteUser(authUser.user.id);
+      } catch (deleteError) {
+        console.error('Failed to cleanup auth user after profile creation error:', deleteError);
+      }
       throw error;
     }
 
@@ -162,18 +170,26 @@ export async function POST(request: Request) {
         resourceType: 'user',
         resourceId: newUser.id,
         resourceName: newUser.full_name,
-        description: `Created user ${newUser.full_name} (${newUser.email}) with role ${newUser.role}`,
+        description: `Created user ${newUser.full_name} (${newUser.email}) with role ${newUser.role} and temporary password`,
         metadata: {
           email: newUser.email,
           full_name: newUser.full_name,
           role: newUser.role,
           is_active: newUser.is_active,
+          temporary_password_set: true,
         },
       },
       extractRequestContext(request)
     );
 
-    return NextResponse.json(newUser, { status: 201 });
+    return NextResponse.json({
+      ...newUser,
+      message: 'User created successfully.',
+      credentials: {
+        username: email,
+        temporary_password: password,
+      },
+    }, { status: 201 });
   } catch (error) {
     console.error('Create user error:', error);
     return NextResponse.json(
