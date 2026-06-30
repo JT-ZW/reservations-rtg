@@ -3,6 +3,8 @@
  * Generates quotations and invoices with Rainbow Towers branding
  */
 
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Database } from '@/types/database.types';
@@ -45,6 +47,42 @@ const COLORS = {
   border: [229, 231, 235] as [number, number, number], // gray-200
 };
 
+function drawStar(doc: jsPDF, centerX: number, centerY: number, radius: number, color: [number, number, number]) {
+  const outerRadius = radius;
+  const innerRadius = radius * 0.45;
+  const points = 5;
+  const coordinates: [number, number][] = [];
+
+  for (let index = 0; index < points * 2; index += 1) {
+    const currentRadius = index % 2 === 0 ? outerRadius : innerRadius;
+    const angle = -Math.PI / 2 + (index * Math.PI / points);
+    coordinates.push([
+      centerX + currentRadius * Math.cos(angle),
+      centerY + currentRadius * Math.sin(angle),
+    ]);
+  }
+
+  doc.setFillColor(...color);
+  doc.setDrawColor(...color);
+
+  coordinates.forEach((coordinate, index) => {
+    if (index === 0) {
+      doc.moveTo(coordinate[0], coordinate[1]);
+    } else {
+      doc.lineTo(coordinate[0], coordinate[1]);
+    }
+  });
+
+  doc.fill();
+}
+
+function drawStarRating(doc: jsPDF, x: number, y: number, size: number, color: [number, number, number], count = 5) {
+  const spacing = size * 2.2;
+  for (let index = 0; index < count; index += 1) {
+    drawStar(doc, x + index * spacing, y, size, color);
+  }
+}
+
 /**
  * Format currency
  */
@@ -80,33 +118,54 @@ function formatTime(timeString: string): string {
 /**
  * Add header with Rainbow Towers branding
  */
-function addHeader(doc: jsPDF, documentType: 'quotation' | 'invoice') {
-  // Company name with gradient effect simulation
-  doc.setFillColor(...COLORS.primary);
-  doc.rect(0, 0, 210, 35, 'F');
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
-  doc.text('RAINBOW TOWERS', 105, 15, { align: 'center' });
-  
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Conference & Event Booking', 105, 22, { align: 'center' });
-  
-  doc.setFontSize(10);
-  doc.text('Harare, Zimbabwe | +263 4 251 666 | events@rainbowtowers.co.zw', 105, 29, { align: 'center' });
-  
-  // Document type badge
-  doc.setFillColor(...COLORS.secondary);
+async function loadLogoImageData(): Promise<string | null> {
+  try {
+    const imagePath = path.join(process.cwd(), 'public', 'rtg-logo.png');
+    const imageBuffer = await readFile(imagePath);
+    return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
+async function addHeader(doc: jsPDF, documentType: 'quotation' | 'invoice') {
+  const logoImageData = await loadLogoImageData();
   const docTypeText = documentType === 'quotation' ? 'QUOTATION' : 'INVOICE';
-  const textWidth = doc.getTextWidth(docTypeText);
-  doc.rect(190 - textWidth - 10, 42, textWidth + 8, 10, 'F');
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageWidth, 38, 'F');
+  doc.setFillColor(...COLORS.primary);
+  doc.rect(0, 0, pageWidth, 8, 'F');
+  doc.setFillColor(...COLORS.secondary);
+  doc.rect(0, 8, pageWidth, 30, 'F');
+
+  if (logoImageData) {
+    try {
+      doc.addImage(logoImageData, 'PNG', 15, 9, 24, 24);
+    } catch {
+      // Fall back to text-based header if the logo cannot be rendered
+    }
+  }
   
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(docTypeText, 194 - textWidth, 49, { align: 'right' });
+  doc.text('RAINBOW TOWERS HOTEL & CONFERENCE CENTRE', 52, 15);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Conference & Event Booking', 52, 22);
+  doc.text('Harare, Zimbabwe | +263 4 251 666 | events@rainbowtowers.co.zw', 52, 27);
+  
+  doc.setFillColor(217, 119, 6);
+  const textWidth = doc.getTextWidth(docTypeText);
+  doc.roundedRect(pageWidth - textWidth - 27, 31, textWidth + 12, 7.5, 1.2, 1.2, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(docTypeText, pageWidth - 21 - textWidth, 36, { align: 'right' });
 }
 
 /**
@@ -146,7 +205,7 @@ export async function generateQuotation(data: DocumentData): Promise<Blob> {
   const currency = booking.currency || 'USD';
   
   // Header
-  addHeader(doc, 'quotation');
+  await addHeader(doc, 'quotation');
   
   // Document details
   let yPos = 60;
@@ -366,7 +425,7 @@ export async function generateInvoice(data: DocumentData): Promise<Blob> {
   const currency = booking.currency || 'USD';
   
   // Header
-  addHeader(doc, 'invoice');
+  await addHeader(doc, 'invoice');
   
   // Document details
   let yPos = 60;

@@ -29,22 +29,22 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Try to refresh/get the session first
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  // Log session check for debugging
-  console.log('Middleware session check:', { 
-    path: request.nextUrl.pathname, 
-    hasSession: !!session,
-    userId: session?.user?.id 
-  });
-
-  // Get user for authentication check
+  // Validate the authenticated user directly with Supabase
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
+
+  if (error) {
+    console.log('Middleware: User validation failed', { path: request.nextUrl.pathname, error: error.message });
+  }
+
+  // Log session check for debugging
+  console.log('Middleware session check:', {
+    path: request.nextUrl.pathname,
+    hasUser: !!user,
+    userId: user?.id,
+  });
 
   // Redirect to login if not authenticated and trying to access protected routes
   if (!user && !request.nextUrl.pathname.startsWith('/login')) {

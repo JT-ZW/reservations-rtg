@@ -6,8 +6,8 @@
 import { useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-const INACTIVITY_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-const WARNING_BEFORE_TIMEOUT = 5 * 60 * 1000; // 5 minutes before timeout
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+const WARNING_BEFORE_TIMEOUT = 1 * 60 * 1000; // 1 minute before timeout
 
 export function useSessionTimeout(onWarning?: () => void, onTimeout?: () => void) {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -38,7 +38,7 @@ export function useSessionTimeout(onWarning?: () => void, onTimeout?: () => void
     };
 
     // Events that indicate user activity
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'mousemove'];
 
     // Reset timer on any user activity
     const handleActivity = () => {

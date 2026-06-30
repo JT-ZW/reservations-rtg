@@ -1,17 +1,18 @@
 /**
- * Next.js Middleware
+ * Next.js Proxy
  * Handles authentication, session management, and cache control
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
-export async function middleware(request: NextRequest) {
-  // Skip middleware entirely for login page, password reset pages, and auth API
+export async function proxy(request: NextRequest) {
+  // Skip middleware entirely for login page, password reset pages, set password page, and auth API
   if (
     request.nextUrl.pathname === '/login' ||
     request.nextUrl.pathname === '/forgot-password' ||
     request.nextUrl.pathname === '/reset-password' ||
+    request.nextUrl.pathname === '/set-password' ||
     request.nextUrl.pathname.startsWith('/api/auth/')
   ) {
     return NextResponse.next();

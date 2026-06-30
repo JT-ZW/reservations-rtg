@@ -29,7 +29,7 @@ export default function GenerateQuotationButton({ bookingId }: GenerateQuotation
       const data = await response.json();
 
       // Generate PDF
-      const pdf = generateQuotationPDF(data);
+      const pdf = await generateQuotationPDF(data);
 
       // Create descriptive filename: EventName_ClientName_Date.pdf
       const eventName = data.booking.event_type?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Event';

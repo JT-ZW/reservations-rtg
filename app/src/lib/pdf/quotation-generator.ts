@@ -46,79 +46,157 @@ interface QuotationData {
   };
 }
 
-export function generateQuotationPDF(data: QuotationData): jsPDF {
+function drawStar(doc: jsPDF, centerX: number, centerY: number, radius: number, color: [number, number, number]) {
+  const outerRadius = radius;
+  const innerRadius = radius * 0.45;
+  const points = 5;
+  const coordinates: [number, number][] = [];
+
+  for (let index = 0; index < points * 2; index += 1) {
+    const currentRadius = index % 2 === 0 ? outerRadius : innerRadius;
+    const angle = -Math.PI / 2 + (index * Math.PI / points);
+    coordinates.push([
+      centerX + currentRadius * Math.cos(angle),
+      centerY + currentRadius * Math.sin(angle),
+    ]);
+  }
+
+  doc.setFillColor(...color);
+  doc.setDrawColor(...color);
+
+  coordinates.forEach((coordinate, index) => {
+    if (index === 0) {
+      doc.moveTo(coordinate[0], coordinate[1]);
+    } else {
+      doc.lineTo(coordinate[0], coordinate[1]);
+    }
+  });
+
+  doc.fill();
+}
+
+function drawStarRating(doc: jsPDF, x: number, y: number, size: number, color: [number, number, number], count = 5) {
+  const spacing = size * 2.2;
+  for (let index = 0; index < count; index += 1) {
+    drawStar(doc, x + index * spacing, y, size, color);
+  }
+}
+
+async function loadLogoDataUrl(): Promise<string | null> {
+  try {
+    const response = await fetch('/rtg-logo.png');
+    if (!response.ok) {
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+
+    return `data:image/png;base64,${btoa(binary)}`;
+  } catch {
+    return null;
+  }
+}
+
+export async function generateQuotationPDF(data: QuotationData): Promise<jsPDF> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const logoDataUrl = await loadLogoDataUrl();
 
   // RTG Gold Color
   const goldColor: [number, number, number] = [218, 165, 32];
   const darkGold: [number, number, number] = [184, 134, 11];
-  
+
   // Set default font to helvetica (closest to Century Gothic in jsPDF)
   doc.setFont('helvetica');
-  
+
   // ============================================================
-  // HEADER SECTION - Compact layout
+  // HEADER SECTION - matches the branded proforma invoice exactly:
+  // centered logo, centered address block, right-aligned date,
+  // then a full-width gold "PROFORMA INVOICE" bar.
   // ============================================================
-  
-  let yPos = 12;
-  
-  // LEFT SIDE: RTG Logo
-  const logoPath = '/rtg-logo.png';
-  try {
-    doc.addImage(logoPath, 'PNG', 12, yPos, 35, 13);
-  } catch {
-    console.warn('Logo not found, continuing without it');
+
+  const logoSize = 32;
+  const logoX = (pageWidth - logoSize) / 2;
+  const logoY = 8;
+
+  // Clean white background behind the logo/contact block
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageWidth, 58, 'F');
+
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, 'PNG', logoX, logoY, logoSize, logoSize);
+    } catch {
+      // Fall back to text-based branding if the logo cannot be rendered
+      doc.setTextColor(...darkGold);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('THE RAINBOW TOWERS', pageWidth / 2, logoY + 14, { align: 'center' });
+      drawStarRating(doc, pageWidth / 2 - 11, logoY + 19, 1.4, goldColor);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text("HARARE'S LUXURY HOTEL & CONFERENCE CENTRE", pageWidth / 2, logoY + 24, { align: 'center' });
+    }
+  } else {
+    doc.setTextColor(...darkGold);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('THE RAINBOW TOWERS', pageWidth / 2, logoY + 14, { align: 'center' });
+    drawStarRating(doc, pageWidth / 2 - 11, logoY + 19, 1.4, goldColor);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text("HARARE'S LUXURY HOTEL & CONFERENCE CENTRE", pageWidth / 2, logoY + 24, { align: 'center' });
   }
-  
-  // CENTER/RIGHT: Hotel Information (more compact)
-  const rightStart = 55;
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...darkGold);
-  doc.text('THE RAINBOW TOWERS', rightStart, yPos + 4);
-  
-  // Stars - 5 star hotel rating
-  doc.setFontSize(12);
-  doc.setTextColor(...goldColor);
-  doc.text('★ ★ ★ ★ ★', rightStart, yPos + 10);
-  
-  // Hotel details - more compact
-  doc.setFontSize(7);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PREMIER LEISURE HOTEL & CONFERENCE CENTRE', rightStart, yPos + 13);
-  
+
+  // Centered contact info block directly below the logo
+  const addressLineY = logoY + logoSize + 5; // line 1
+  const telLineY = addressLineY + 4;          // line 2
+  const emailLineY = telLineY + 4;             // line 3
+  const websiteLineY = emailLineY + 4;         // line 4
+
+  doc.setTextColor(60, 60, 60);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.text('1 Pennefather Avenue, P.O. Box 3033, Causeway, Harare, Zimbabwe', rightStart, yPos + 16.5);
-  doc.text('Tel: +263 242 772633 - 9', rightStart, yPos + 19.5);
-  doc.text('Email: reservations@rtgafrica.com | Website: www.rtgafrica.com', rightStart, yPos + 22.5);
-  
-  // DATE (top right corner)
-  const currentDate = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit',
+  doc.text('1 Pennefather Avenue, P.O. Box 3033, Causeway, Harare, Zimbabwe', pageWidth / 2, addressLineY, { align: 'center' });
+  doc.text('Tel: +263 242 772633 - 9', pageWidth / 2, telLineY, { align: 'center' });
+  doc.text('Email: reservations@rtg.co.zw', pageWidth / 2, emailLineY, { align: 'center' });
+  doc.text('Website: www.rtgafrica.com', pageWidth / 2, websiteLineY, { align: 'center' });
+
+  // DATE - right aligned, vertically aligned with the email line
+  const quotationDate = new Date().toLocaleDateString('en-GB', {
+    day: 'numeric',
     month: 'long',
-    year: 'numeric'
+    year: 'numeric',
   });
-  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
-  doc.text(`DATE: ${currentDate}`, pageWidth - 12, yPos, { align: 'right' });
-  
-  // PROFORMA INVOICE Header (gold bar) - moved down to not overlap
-  yPos = 38;
+  doc.text('DATE:', pageWidth - 50, emailLineY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(quotationDate, pageWidth - 50 + 11, emailLineY);
+
+  // PROFORMA INVOICE - full-width gold bar with bold black centered text
+  const barY = 58;
+  const barHeight = 6;
   doc.setFillColor(...goldColor);
-  doc.rect(12, yPos, pageWidth - 24, 7, 'F');
-  doc.setFontSize(12);
+  doc.rect(0, barY, pageWidth, barHeight, 'F');
+  doc.setFontSize(12.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('PROFORMA INVOICE', pageWidth / 2, yPos + 4.8, { align: 'center' });
-  
+  doc.setTextColor(0, 0, 0);
+  doc.text('PROFORMA INVOICE', pageWidth / 2, barY + barHeight / 2 + 1.6, { align: 'center' });
+
   // ============================================================
   // TWO COLUMN LAYOUT: Client Details (Left) | VAT/Bank (Right)
   // ============================================================
   
-  yPos = 50;
+  let yPos = barY + barHeight + 6;
   const leftCol = 12;
   const labelCol = leftCol + 20;
   const rightCol = 115;

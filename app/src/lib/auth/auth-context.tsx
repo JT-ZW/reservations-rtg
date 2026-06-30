@@ -9,6 +9,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { User } from '@/types';
 import { createClient } from '@/lib/supabase/client';
+import { useSessionTimeout } from '@/lib/auth/useSessionTimeout';
 
 interface AuthContextType {
   user: User | null;
@@ -23,7 +24,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sessionCheckInterval, setSessionCheckInterval] = useState<NodeJS.Timeout | null>(null);
 
   const syncSessionWithServer = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
     try {
@@ -38,6 +38,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('AuthProvider: failed to sync session', error);
     }
   }, []);
+
+  const handleSessionExpired = useCallback(async (reason = 'expired') => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('AuthProvider: failed to sign out after session expiry', error);
+    }
+
+    setUser(null);
+    setLoading(false);
+
+    if (typeof window !== 'undefined') {
+      window.location.assign(`/login?reason=${reason}`);
+    }
+  }, [supabase]);
 
   const loadUserProfile = useCallback(
     async (userId: string | null) => {
@@ -64,50 +79,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refreshUser = useCallback(async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error) {
-      console.error('AuthProvider: refreshUser failed', error.message);
-      setUser(null);
+    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+    if (error || !authUser) {
+      console.error('AuthProvider: refreshUser failed', error?.message);
+      await handleSessionExpired('expired');
       return;
     }
 
-    await loadUserProfile(data.user?.id ?? null);
-  }, [supabase, loadUserProfile]);
+    await loadUserProfile(authUser.id);
+  }, [supabase, loadUserProfile, handleSessionExpired]);
 
   // Check session validity periodically
   const checkSessionValidity = useCallback(async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session) {
+      const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+
+      if (userError || !authUser) {
         console.log('AuthProvider: Session invalid or expired, signing out');
-        await supabase.auth.signOut();
-        setUser(null);
-        window.location.href = '/login';
+        await handleSessionExpired('expired');
         return;
       }
 
-      // Check if token will expire soon (within 5 minutes)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        await handleSessionExpired('expired');
+        return;
+      }
+
       const expiresAt = session.expires_at;
       if (expiresAt) {
         const expiresIn = expiresAt - Math.floor(Date.now() / 1000);
-        
-        if (expiresIn < 300) { // Less than 5 minutes
+
+        if (expiresIn < 60) {
           console.log('AuthProvider: Token expiring soon, refreshing...');
           const { error: refreshError } = await supabase.auth.refreshSession();
-          
+
           if (refreshError) {
             console.error('AuthProvider: Failed to refresh session', refreshError);
-            await supabase.auth.signOut();
-            setUser(null);
-            window.location.href = '/login';
+            await handleSessionExpired('refresh_failed');
           }
         }
       }
     } catch (error) {
       console.error('AuthProvider: Session check failed', error);
     }
-  }, [supabase]);
+  }, [supabase, handleSessionExpired]);
 
   useEffect(() => {
     let isMounted = true;
@@ -117,32 +134,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (!isMounted) {
           console.log('AuthProvider: Component unmounted, aborting');
           return;
         }
 
-        if (error) {
-          console.error('AuthProvider: getSession error', error.message);
+        if (sessionError) {
+          console.error('AuthProvider: getSession error', sessionError.message);
           setUser(null);
           setLoading(false);
           return;
         }
 
-        console.log('AuthProvider: Got session', { 
-          hasSession: !!data.session, 
-          userId: data.session?.user?.id 
-        });
+        const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
 
-        if (data.session) {
-          await syncSessionWithServer('SIGNED_IN', data.session);
+        if (!isMounted) {
+          return;
+        }
+
+        if (userError || !authUser) {
+          console.log('AuthProvider: No authenticated user found');
+          await handleSessionExpired('expired');
+          return;
+        }
+
+        console.log('AuthProvider: Got authenticated user', { userId: authUser.id });
+
+        if (session) {
+          await syncSessionWithServer('SIGNED_IN', session);
           console.log('AuthProvider: Session synced with server');
         }
 
-        await loadUserProfile(data.session?.user?.id ?? null);
-        console.log('AuthProvider: User profile loaded', { userId: data.session?.user?.id });
+        await loadUserProfile(authUser.id);
+        console.log('AuthProvider: User profile loaded', { userId: authUser.id });
         
       } catch (error) {
         console.error('AuthProvider: Initialization error', error);
@@ -166,9 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Handle specific auth events
       if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setLoading(false);
-        window.location.href = '/login';
+        await handleSessionExpired('signed_out');
         return;
       }
 
@@ -177,32 +201,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       await syncSessionWithServer(event, session);
-      await loadUserProfile(session?.user?.id ?? null);
+
+      const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+      if (userError || !authUser) {
+        await handleSessionExpired('expired');
+        return;
+      }
+
+      await loadUserProfile(authUser.id);
       setLoading(false);
     });
 
-    // Set up periodic session check (every 2 minutes)
-    const interval = setInterval(checkSessionValidity, 120000);
-    setSessionCheckInterval(interval);
+    // Set up periodic session check (every 60 seconds)
+    const interval = setInterval(() => {
+      void checkSessionValidity();
+    }, 60000);
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
-      if (interval) {
-        clearInterval(interval);
-      }
+      clearInterval(interval);
     };
-  }, [supabase, loadUserProfile, syncSessionWithServer, checkSessionValidity]);
+  }, [supabase, loadUserProfile, syncSessionWithServer, checkSessionValidity, handleSessionExpired]);
+
+  useSessionTimeout(undefined, handleSessionExpired);
 
   const handleSignOut = async () => {
-    // Clear session check interval
-    if (sessionCheckInterval) {
-      clearInterval(sessionCheckInterval);
-      setSessionCheckInterval(null);
-    }
-    
     await supabase.auth.signOut();
     setUser(null);
+    setLoading(false);
   };
 
   return (

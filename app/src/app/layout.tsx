@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/auth-context";
@@ -16,7 +16,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Rainbow Towers Booking System",
   description: "Conference & Event Booking Management System",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
+  icons: [
+    {
+      rel: "icon",
+      url: "/rtg-logo.png",
+      type: "image/png",
+    },
+    {
+      rel: "apple-touch-icon",
+      url: "/rtg-logo.png",
+      type: "image/png",
+    },
+  ],
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 // Disable caching at root level to prevent stale data
